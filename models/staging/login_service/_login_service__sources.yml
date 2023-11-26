@@ -1,0 +1,16 @@
+#_login_service__sources.yml
+
+version: 2
+
+sources:
+  - name: login_service
+    schema: public
+    description: Login data for the Login Service
+    tables:
+      - name: raw_people
+        description: One record per person that has logged in
+      - name: raw_logins
+        description: One record per login that a person has made
+        freshness:
+          warn_after: {count: 24, period: hour}
+        loaded_at_field: "logintimestamp::timestamp"

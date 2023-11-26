@@ -1,0 +1,3 @@
+sqlfluff==0.10.1
+dbt-postgres
+pandas==1.2.3

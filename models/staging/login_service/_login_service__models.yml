@@ -1,0 +1,24 @@
+#_login_service__models.yml
+
+version: 2
+
+models:
+  - name: stg_login_service__people
+    description: Customer data
+    columns:
+      - name: people_id
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_login_service__logins
+    columns:
+      - name: login_id
+        tests:
+          - unique
+          - not_null
+
+      - name: day_of_week
+        tests:
+          - accepted_values:
+              values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]

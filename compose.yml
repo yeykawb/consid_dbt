@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  consid_postgres:
+    container_name: consid_postgres
+    image: postgres:15.2-alpine
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "8000:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - consid_dbt:/var/lib/postgresql/data
+
+  consid_dbt:
+    container_name: consid_dbt
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # On Linux, you may need to update USER_UID and USER_GID below 
+        # if not your local UID is not 1000.
+        USER_UID: 1000
+        USER_GID: 1000
+    image: consid_dbt
+    volumes:
+      - .:/usr/src/consid_dbt:cached
+    depends_on:
+      consid_postgres:
+        condition: service_healthy
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+    
+    # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
+    network_mode: service:consid_postgres
+
+    # Uncomment the next line to use a non-root user for all processes.
+    user: vscode
+  
+volumes:
+  consid_dbt:
