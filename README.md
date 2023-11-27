@@ -1,6 +1,9 @@
 # dbt from scratch 🌟 a Consid session
 
-# Introduction
+> An end-to-end, containerized data engineering project that leverages open-source technology to generate, transform, load and visualize data. Everything runs on `Docker` with official images and `Dev Containers`.
+> 
+
+# 1️⃣ Introduction
 
 What we will use:
 
@@ -9,19 +12,20 @@ What we will use:
 - `dbt` to transform data. We’ll also mock EL with Python scripts and the `dbt seed` command.
 - An official `PostgreSQL` image as our open-source relational database (mock-DWH). Easiest to setup with `dbt` as it has an official provider.
 - `DBeaver` as database UI. Other options could be `psql` (CLI), `adminer` or `pgAdmin`.
+- `Metabase` as our open-source, free and self-hosted on Docker visualization tool.
 
 What we won’t use:
 
-- An orchestrator/workflow scheduler. Examples of this would be the paid dbt Cloud offering, Azure Data Factory, Airflow, Prefect, Dagster, Cron jobs, Kestra, Databricks workflows. We won’t use this because they either cost money or are too complex to setup properly for a local project. In a real-life scenario, most probably as a consultant, dbt Cloud would be used.
+- An orchestrator/workflow scheduler. Examples of this would be the paid `dbt Cloud` offering, `Azure Data Factory`, `Airflow`, `Prefect`, `Dagster`, `Cron jobs`, `Kestra`, `Databricks workflows`. We won’t use this because they either cost money or are too complex to setup properly for a local project. In a real-life scenario, most probably as a consultant, `dbt Cloud` would be used. I might add open-source `Dagster` in the future.
 - `git` can be added whenever you want.
 
 Prerequisites to follow along:
 
-- `Docker`
+- `Docker Desktop`
 
-# Init
+# 2️⃣ Init
 
-Open a terminal and create a folder that our project will live in. Change into that directory and start the docker initialization. This will create three files for us, and we will overwrite two of them. We will get a `.dockerignore` file for free.
+Open a terminal and create a folder that our project will live in. Change into that directory and start the Docker initialization. This will create three files for us, and we will overwrite two of them. We will get a `.dockerignore` file for free.
 
 ```bash
 mkdir consid_dbt && \
@@ -110,7 +114,14 @@ services:
 
     # Uncomment the next line to use a non-root user for all processes.
     user: vscode
-  
+
+  metabase:
+    image: metabase/metabase
+    container_name: metabase
+    ports:
+      - "3000:3000"
+    network_mode: service:consid_postgres
+
 volumes:
   consid_dbt:
 ```
@@ -118,12 +129,13 @@ volumes:
 Edit the `requirements.txt` with this:
 
 ```python
-sqlfluff==0.10.1
-dbt-postgres
-pandas==1.2.3
+sqlfluff==2.3.5
+sqlfluff-templater-dbt==2.3.5
+dbt-postgres==1.7.2
+pandas==2.1.3
 ```
 
-`sqlfluff` is a linting tool that works great with `dbt` . `dbt-postgres` will also install `dbt-core` and pandas is used in some Python scripts later on. 
+`sqlfluff` is a linting tool that works great with `dbt` . `dbt-postgres` will also install `dbt-core` and `pandas` is used in some Python scripts later on. 
 
 Edit the `devcontainer.json` with this:
 
@@ -175,8 +187,8 @@ Edit the `devcontainer.json` with this:
             ]
         }
     },
-    // Uncomment the git initialization for this demo (no repo initialized).
-    //"initializeCommand": "git submodule update --init",
+    // Comment the if git is not initialized.
+    "initializeCommand": "git submodule update --init",
     "remoteUser": "vscode"
 }
 ```
@@ -191,7 +203,7 @@ This will create a container, with two containers inside. One is our database, a
 
 To start working inside the container, where `dbt` is installed, we can utilize our pre-configured `devcontainer.json` file to “Reopen in container”. Hit `ctrl+shift+p` and search for this.
 
-Now it’s time to let `dbt` do some scaffolding for us. We will create a new dbt project inside the current directory. This will create a new project inside a subdirectory named what we call the project. I did not like this setup as it would mean this folder structure → `consid_dbt/consid_dbt`. Also, the default location for `profiles.yml` is at `~/.dbt` which is good for local projects, but then each developer needs to place this file outside of the repository on their local machine. By excluding it from the initialization and adding it manually inside the repo (and using `jinja` to inject variables from an `.env` file not to expose sensitive values) we make it possible to share this project with anyone easily. However, the credentials is not sensitive here so we will not hide them.
+Now it’s time to let `dbt` do some scaffolding for us. We will create a new `dbt` project inside the current directory. This will create a new project inside a subdirectory named what we call the project. I did not like this setup as it would mean this folder structure → `consid_dbt/consid_dbt`. Also, the default location for `profiles.yml` is at `~/.dbt` which is good for local projects, but then each developer needs to place this file outside of the repository on their local machine. By excluding it from the initialization and adding it manually inside the repo (and using `jinja` to inject variables from an `.env` file not to expose sensitive values) we make it possible to share this project with anyone easily. However, the credentials is not sensitive here so we will not hide them.
 
 ```bash
 dbt init consid_dbt --skip-profile-setup && \
@@ -212,13 +224,45 @@ consid_dbt:
   outputs:
     dev:
       type: postgres
-      host: localhost
+      host: consid_postgres
       user: postgres
       password: postgres
       port: 5432
       dbname: postgres
       schema: public
       threads: 1
+```
+
+Paste this into the `dbt_project.yml`:
+
+```yaml
+#dbt_project.yml
+
+name: 'consid_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'consid_dbt'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+models:
+  consid_dbt:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: ephemeral
+    marts:
+      +materialized: table
 ```
 
 And this on `packages.yml` with this:
@@ -231,21 +275,21 @@ packages:
     version: 1.1.1
 ```
 
-# `dbt` setup
+# 3️⃣ `dbt` setup
 
-Test the connection to our PostgreSQL container by running:
+Test the connection to our `PostgreSQL` container by running:
 
 ```bash
 dbt debug
 ```
 
-Install packages as defined in the packages.yml:
+Install packages as defined in the `packages.yml`:
 
 ```bash
 dbt deps
 ```
 
-## Seeds
+## 🌱 Seeds
 
 Right now our repo doesn’t look like much. Let’s create `seeds`.
 
@@ -265,7 +309,7 @@ Right now our repo doesn’t look like much. Let’s create `seeds`.
 
 However, we will use it to mock an EL flow to our `bronze` schema. It will be a simple Python script that will act as an EL-tool, such as Azure Data Factory, that fetches new `logins` from a source system and loads it into our `bronze` layer. This layer will be referenced to by `dbt` as a `source`.
 
-## Scripts
+## 📜 Scripts
 
 Create a folder called scripts, one file called `login_generator_script.py` and one file called `people_generator_script.py`.
 
@@ -417,7 +461,7 @@ SELECT id, firstname, lastname, created_at, updated_at, deleted_at
 FROM public.raw_people;
 ```
 
-## Models and sources
+## 🧊 Models and sources
 
 A `model` is a `select`-statement in SQL that will compile into `DML` and `DDL` queries in the target data warehouse. They will create tables, views or nothing at all (ephemeral). `dbt` supports `Jinja templating`, and offers a modular approach to development in SQL. A `source` is a table inside the data warehouse or lakehouse that already has been populated with data by another workflow. It is a reference to that raw table, and by specifying a `sources.yml` file we allow `dbt` to reference these sources when the code compiles.
 
@@ -534,7 +578,7 @@ sources:
 Paste this into `stg_login_service__logins.sql`:
 
 ```sql
-#stg_login_service__logins.sql
+--stg_login_service__logins.sql
 
 {{
   config(
@@ -572,7 +616,7 @@ select * from renamed
 Paste this into `stg_login_service__people.sql`:
 
 ```sql
-#stg_login_service__people.sql
+--stg_login_service__people.sql
 
 {{
   config(
@@ -605,7 +649,7 @@ select * from join_and_mark_deleted_people
 Paste this into `base_login_service__deleted_people.sql`:
 
 ```sql
-#base_login_service__deleted_people.sql
+--base_login_service__deleted_people.sql
 
 {{
   config(
@@ -632,7 +676,7 @@ select * from deleted_customers
 Paste this into `base_login_service__people.sql`:
 
 ```sql
-#base_login_service__people.sql
+--base_login_service__people.sql
 
 {{
   config(
@@ -657,6 +701,8 @@ renamed as (
 select * from renamed
 ```
 
+## 🐇 `sqlfluff`
+
 Notice how the `sqlfluff` plugin is complaining about a rule. It wants us to “Select wildcards then simple targets before calculations and aggregates”. Another default rule is to not allow a file to end without a empty new line. In this case I don’t want this specific rule to apply. Let’s change this behavior by adding a `.sqlfluff` file and add the following code to it.
 
 ```bash
@@ -665,7 +711,23 @@ touch .sqlfluff
 
 ```toml
 [sqlfluff]
+templater = dbt
+dialect = postgres
 exclude_rules = L034, L009
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+load_macros_from_path = macros
+
+# If using the dbt templater, we recommend setting the project dir.
+[sqlfluff:templater:dbt]
+project_dir = ./
+profiles_dir = ./
+profile = consid_dbt
+target = dev
+
+[sqlfluff:rules:ambiguous.column_references]  # Accept number in group by
+group_by_and_order_by_style = implicit
 ```
 
 Run the project to see the views created by `dbt`:
@@ -686,3 +748,255 @@ target
 dbt_packages
 macros
 ```
+
+## 🔜 Intermediate
+
+The reason for an intermediate layer is to prepare staging data into marts. It could very well be `ephemeral` which means that they will not create any object in the target data warehouse - the query will only run as a CTE and is able to be reference by the `ref` command in `dbt`. It is beneficial to use a separate layer for these queries as it will reduce complexity of queries and promote modularity in the code.
+
+Create the `intermediate` layer:
+
+```bash
+mkdir models/intermediate && \
+touch models/intermediate/_int_marketing__models.yml && \
+touch models/intermediate/int_logins_pivoted_to_people.sql
+```
+
+Paste this into `_int_marketing__models.yml`:
+
+```yaml
+#_int_marketing__models.yml
+
+version: 2
+
+models:
+  - name: int_logins_pivoted_to_people
+    description: Calculate the number of logins per people
+    columns:
+      - name: people_id
+      - name: login_amount
+```
+
+Paste this into `int_logins_pivoted_to_people.sql`:
+
+```sql
+--int_logins_pivoted_to_people.sql
+
+with logins as (
+    select * from {{ ref('stg_login_service__logins') }}
+),
+
+pivot_and_aggregate_logins_to_people_grain as (
+
+    select
+        people_id,
+        count(login_id) as login_amount
+    from logins
+    group by 1
+)
+
+select * from pivot_and_aggregate_logins_to_people_grain
+```
+
+Create the `marts` layer, together with a `snapshot` for SCD2 (`people` table):
+
+```bash
+mkdir snapshots && \
+touch snapshots/people_history.sql && \
+
+mkdir models/marts && \
+mkdir models/marts/marketing && \
+touch models/marts/marketing/_marketing_models.yml && \
+touch models/marts/marketing/logins.sql && \
+touch models/marts/marketing/people.sql
+
+```
+
+Paste this into `people_history.sql`:
+
+```sql
+--people_history.sql
+
+{% snapshot people_history %}
+
+{{
+   config(
+       target_database='postgres',
+       target_schema='temporal_data',
+       unique_key='people_id',
+       strategy='timestamp',
+       updated_at='updated_at',
+       invalidate_hard_deletes=True
+   )
+}}
+
+select * from {{ ref('stg_login_service__people') }}
+
+{% endsnapshot %}
+```
+
+Paste this into `_marketing_models.yml`:
+
+```yaml
+#_marketing_models.yml
+
+version: 2
+models:
+  - name: people
+    columns:
+      - name: people_id
+        description: Primary key of the people table
+        tests:
+          - unique
+          - not_null
+      - name: full_name
+        description: The full name.
+      - name: updated_at
+        description: The date and time when the person's record was last updated.
+          This is in the standard timestamp format.
+      - name: is_deleted
+        description: Indicates whether the person's record has been marked as deleted.
+          This is a true or false value.
+      - name: name_length
+        description: The number of characters in the person's full name. This is a
+          whole number.
+      - name: login_amount
+        description: The total number of times the person has logged in. This is a
+          whole number.
+    description: The dbt model 'people' is a tool that organizes and analyzes user
+      data. It tracks whether a user's account is active, the number of times they've
+      logged in, the length of their name, and the last time their data was updated.
+      This model can be used to understand user behavior, such as how often they log
+      in and if there's a correlation between name length and login frequency. This
+      information can help in making data-driven decisions, like tailoring user engagement
+      strategies.
+  - name: logins
+    description: One record per login.
+    columns:
+      - name: login_id
+        description: Primary key of the login.
+        tests:
+          - unique
+          - not_null
+      - name: login_timestamp
+        description: When the user logged in.
+      - name: day_of_week
+        description: Number indicating the dayOfWeek. 1 = Monday.
+      - name: people_id
+        description: Foreign key for peopleId. Should be renamed in public schema.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('people')
+              field: people_id
+      - name: full_name
+        description: Full name of people
+      - name: _dbt_hash
+        description: A unique identifier for each login record, generated using a
+          hash function that combines several columns to ensure uniqueness.
+      - name: _dbt_inserted_at
+        description: The timestamp when this login record was first added to the database.
+      - name: _dbt_updated_at
+        description: The timestamp when this login record was last modified in the
+          database.
+      - name: login_amount
+        description: The total number of times a person has logged in. This is a running
+          count that increments by 1 each time the person logs in.
+```
+
+Paste this into `logins.sql`:
+
+```sql
+--logins.sql
+
+{{
+  config(
+    materialized = 'incremental',
+    unique_key = 'login_id',
+    on_schema_change = 'append_new_columns',
+    incremental_strategy = 'merge',
+    merge_exclude_columns = ['_dbt_inserted_at']
+    )
+}}
+
+with logins as (
+    select * from {{ ref("stg_login_service__logins") }}
+),
+
+people as (
+    select * from {{ ref("stg_login_service__people") }}
+),
+
+rename as (
+    select
+        logins.login_id,
+        logins.login_timestamp,
+        logins.day_of_week,
+        logins.people_id,
+        people.full_name
+    from logins
+    left join people on logins.people_id = people.people_id
+),
+
+final as (
+    select
+        *,
+        {{ 
+            dbt_utils.generate_surrogate_key(
+                dbt_utils.get_filtered_columns_in_relation(
+                        from=ref("stg_login_service__logins")
+                )
+            )
+        }} as _dbt_hash,
+        current_timestamp as _dbt_inserted_at,
+        current_timestamp as _dbt_updated_at
+    from rename
+)
+
+select * from final
+
+{% if is_incremental() %}
+
+    where _dbt_hash not in (select _dbt_hash from {{ this }})
+
+{% endif %}
+```
+
+Paste this into `people.sql`:
+
+```sql
+--people.sql
+
+{{
+  config(
+    materialized = 'table',
+    )
+}}
+
+with people as (
+    select
+        *,
+        length(full_name) as name_length
+    from {{ ref("stg_login_service__people") }}
+),
+
+logins_pivoted_to_people as (
+    select * from {{ ref('int_logins_pivoted_to_people') }}
+),
+
+final as (
+
+    select
+        people.*,
+        logins_pivoted_to_people.login_amount
+    from people
+    left join
+        logins_pivoted_to_people
+        on people.people_id = logins_pivoted_to_people.people_id
+)
+
+select * from final
+```
+
+## 👁️‍🗨️ Metabase
+
+Open meta base at `[localhost:3000](http://localhost:3000)` and follow the setup. For `host` and `port` supply the network that we set up in the `compose.yml` → `consid_postgres` and `5432`. This differs from how we connect to the database from our laptop, as we are then connecting to the database with `localhost` and the other exposed port `8000`. Explore how many logins our users has done each!
