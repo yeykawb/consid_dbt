@@ -40,6 +40,12 @@ services:
 
     # Uncomment the next line to use a non-root user for all processes.
     user: vscode
-  
+
+  metabase:
+    image: metabase/metabase
+    container_name: metabase
+    ports:
+      - "3000:3000"
+    network_mode: service:consid_postgres
 volumes:
   consid_dbt:

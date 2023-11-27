@@ -1,0 +1,10 @@
+#_int_marketing__models.yml
+
+version: 2
+
+models:
+  - name: int_logins_pivoted_to_people
+    description: Calculate the number of logins per people
+    columns:
+      - name: people_id
+      - name: login_amount

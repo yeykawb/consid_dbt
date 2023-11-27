@@ -1,0 +1,64 @@
+#_marketing_models.yml
+
+version: 2
+models:
+  - name: people
+    columns:
+      - name: people_id
+        description: Primary key of the people table
+        tests:
+          - unique
+          - not_null
+      - name: full_name
+        description: The full name.
+      - name: updated_at
+        description: The date and time when the person's record was last updated.
+          This is in the standard timestamp format.
+      - name: is_deleted
+        description: Indicates whether the person's record has been marked as deleted.
+          This is a true or false value.
+      - name: name_length
+        description: The number of characters in the person's full name. This is a
+          whole number.
+      - name: login_amount
+        description: The total number of times the person has logged in. This is a
+          whole number.
+    description: The dbt model 'people' is a tool that organizes and analyzes user
+      data. It tracks whether a user's account is active, the number of times they've
+      logged in, the length of their name, and the last time their data was updated.
+      This model can be used to understand user behavior, such as how often they log
+      in and if there's a correlation between name length and login frequency. This
+      information can help in making data-driven decisions, like tailoring user engagement
+      strategies.
+  - name: logins
+    description: One record per login.
+    columns:
+      - name: login_id
+        description: Primary key of the login.
+        tests:
+          - unique
+          - not_null
+      - name: login_timestamp
+        description: When the user logged in.
+      - name: day_of_week
+        description: Number indicating the dayOfWeek. 1 = Monday.
+      - name: people_id
+        description: Foreign key for peopleId. Should be renamed in public schema.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('people')
+              field: people_id
+      - name: full_name
+        description: Full name of people
+      - name: _dbt_hash
+        description: A unique identifier for each login record, generated using a
+          hash function that combines several columns to ensure uniqueness.
+      - name: _dbt_inserted_at
+        description: The timestamp when this login record was first added to the database.
+      - name: _dbt_updated_at
+        description: The timestamp when this login record was last modified in the
+          database.
+      - name: login_amount
+        description: The total number of times a person has logged in. This is a running
+          count that increments by 1 each time the person logs in.

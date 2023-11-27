@@ -1,3 +1,5 @@
+--stg_login_service__logins.sql
+
 {{
   config(
     materialized = 'view'

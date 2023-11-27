@@ -1,2 +1,18 @@
 [sqlfluff]
+templater = dbt
+dialect = postgres
 exclude_rules = L034, L009
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+load_macros_from_path = macros
+
+# If using the dbt templater, we recommend setting the project dir.
+[sqlfluff:templater:dbt]
+project_dir = ./
+profiles_dir = ./
+profile = consid_dbt
+target = dev
+
+[sqlfluff:rules:ambiguous.column_references]  # Accept number in group by
+group_by_and_order_by_style = implicit

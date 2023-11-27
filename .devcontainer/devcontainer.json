@@ -47,6 +47,6 @@
         }
     },
     // Uncomment the git initialization for this demo (no repo initialized).
-    //"initializeCommand": "git submodule update --init",
+    "initializeCommand": "git submodule update --init",
     "remoteUser": "vscode"
 }
