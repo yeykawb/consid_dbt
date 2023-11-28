@@ -47,5 +47,6 @@ services:
     ports:
       - "3000:3000"
     network_mode: service:consid_postgres
+    
 volumes:
   consid_dbt:
