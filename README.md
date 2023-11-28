@@ -1050,6 +1050,8 @@ dbt docs generate && dbt docs serve
 
 This will open the web application that hosts the `manifest.json` and `catalog.json` files rendered by the `dbt docs generate` command at `localhost:8080`.
 
-## 👁️‍🗨️ Metabase
+# 4️⃣ Visualize
+
+## 👁️‍🗨️ `Metabase`
 
 Open meta base at `[localhost:3000](http://localhost:3000)` and follow the setup. For `host` and `port` supply the network that we set up in the `compose.yml` → `consid_postgres` and `5432`. This differs from how we connect to the database from our laptop, as we are then connecting to the database with `localhost` and the other exposed port `8000`. Explore how many logins our users has done each!
