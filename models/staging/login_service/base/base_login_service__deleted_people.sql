@@ -1,3 +1,5 @@
+--base_login_service__deleted_people.sql
+
 {{
   config(
     materialized = 'view'
@@ -13,7 +15,7 @@ deleted_customers as (
 
     select
         id as people_id,
-        deleted_at
+        deleted_at::timestamp
     from source
 )
 

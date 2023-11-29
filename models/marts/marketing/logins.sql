@@ -32,6 +32,7 @@ rename as (
 final as (
     select
         *,
+        date(login_timestamp) as date_key,
         {{ 
             dbt_utils.generate_surrogate_key(
                 dbt_utils.get_filtered_columns_in_relation(

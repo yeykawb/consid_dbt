@@ -30,6 +30,7 @@ models:
       in and if there's a correlation between name length and login frequency. This
       information can help in making data-driven decisions, like tailoring user engagement
       strategies.
+
   - name: logins
     description: One record per login.
     columns:
@@ -49,6 +50,13 @@ models:
           - relationships:
               to: ref('people')
               field: people_id
+      - name: date_key
+        description: Foreign key for dates.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dates')
+              field: date_day
       - name: full_name
         description: Full name of people
       - name: _dbt_hash
