@@ -26,18 +26,20 @@ file_exists = os.path.isfile(csv_file)
 existing_data = pd.read_csv(csv_file, keep_default_na=True) if file_exists else pd.DataFrame()
 
 df = pd.DataFrame(data)
+now = str(datetime.datetime.now())
 
 # Set created_at timestamp only if the file is new
 if not file_exists:
-    df['created_at'] = str(datetime.datetime.now())
-    df['updated_at'] = str(datetime.datetime.now())
+    df['created_at'] = now
+    df['updated_at'] = now
     df.to_csv(csv_file, index=False)
     
-
 # Check if row exists in the source file and update updated_at
 if not existing_data.empty and pd.Series(df['id']).isin(existing_data['id']).any():
     df = pd.DataFrame(existing_data)
-    df.loc[df["deleted_at"].isnull(), 'updated_at'] = str(datetime.datetime.now())
+    rows_to_update = (df["deleted_at"].isnull()).sum()
+    df.loc[df["deleted_at"].isnull(), 'updated_at'] = now
     df.to_csv(csv_file, index=False)
-
-print(df)
+    print(f" Updated {rows_to_update} rows.")
+else:
+    print(f" Added {len(df)} rows.")

@@ -6,6 +6,7 @@ import datetime
 import random
 import os
 
+# Function to generate an MD5 hash of the current timestamp
 def generate_unique_id(start_date):
     global unique_id_counter
     timestamp = start_date
@@ -23,7 +24,7 @@ def generate_random_userid():
     return random.randint(1, 4)
 
 def generate_random_login_amount():
-    return random.randint(1, 10)
+    return random.randint(1, 100)
 
 def generate_login_data(iterated_date, num_rows):
     all_logins = []
@@ -40,7 +41,6 @@ def generate_login_data(iterated_date, num_rows):
 
 ###############################################################
 
-# Function to generate an MD5 hash of the current timestamp
 # Makes sure that each ID will be unique.
 unique_id_counter = 1
 
@@ -57,18 +57,23 @@ if os.path.exists(csv_file):
     start_date = last_date + datetime.timedelta(days=1)
 else:
     # If the file doesn't exist, start from the specified date
-    start_date = datetime.datetime(2023, 1, 1)
+    start_year_input = int(input("Enter starting year: "))
+    start_month_input = int(input("Enter starting month: "))
+    start_day_input = int(input("Enter starting day: "))
+    start_date = datetime.datetime(start_year_input, start_month_input, start_day_input)
     
-# Generate login data for one year
-a_week = [i for i in range(365)]
+# Generate login data for each day in selected range, defaults to 7 days.
+range_input = input("Enter the number of days to generate logins for: ")
+range_value = int(range_input) if range_input.isdigit() else 7
+period = [i for i in range(range_value)]
 week_df = pd.DataFrame()
-for each_day in a_week:
-    iterated_date = start_date + datetime.timedelta(days=each_day)
+for day in period:
+    iterated_date = start_date + datetime.timedelta(days=day)
     num_rows = generate_random_login_amount()
     df = generate_login_data(iterated_date, num_rows)
     week_df = pd.concat([week_df, df])
 
 # Append the data to the CSV file
 week_df.to_csv(csv_file, mode='a', header=not os.path.exists(csv_file), index=False)
-
-print(df)
+generated_rows = len(week_df)
+print(f"Generated {generated_rows} logins for {range_value} days.")
