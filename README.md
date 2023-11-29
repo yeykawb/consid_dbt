@@ -14,10 +14,11 @@ What we will use:
 - `DBeaver` as database UI. Other options could be `psql` (CLI), `adminer` or `pgAdmin`.
 - `Metabase` as our open-source, free and self-hosted on Docker visualization tool.
 
-What we won’t use:
+What we won’t use but might add:
 
 - An orchestrator/workflow scheduler. Examples of this would be the paid `dbt Cloud` offering, `Azure Data Factory`, `Airflow`, `Prefect`, `Dagster`, `Cron jobs`, `Kestra`, `Databricks workflows`. We won’t use this because they either cost money or are too complex to setup properly for a local project. In a real-life scenario, most probably as a consultant, `dbt Cloud` would be used. I might add open-source `Dagster` in the future.
-- `git` can be added whenever you want.
+- `git` can be added whenever you want, but it won’t be part of this project to add it.
+- More interesting data sources, either by using datasets from `Kaggle`, or using free APIs.
 
 Prerequisites to follow along:
 
@@ -682,7 +683,7 @@ deleted_customers as (
 
     select
         id as people_id,
-        deleted_at
+        deleted_at::timestamp
     from source
 )
 
@@ -710,7 +711,8 @@ renamed as (
     select
         id as people_id,
         concat(firstname, ' ', lastname) as full_name,
-        updated_at
+        created_at::timestamp,
+        updated_at::timestamp
     from source
 )
 
@@ -767,7 +769,7 @@ macros
 
 ## 🔜 Intermediate
 
-The reason for an intermediate layer is to prepare staging data into marts. It could very well be `ephemeral` which means that they will not create any object in the target data warehouse - the query will only run as a CTE and is able to be reference by the `ref` command in `dbt`. It is beneficial to use a separate layer for these queries as it will reduce complexity of queries and promote modularity in the code.
+The reason for an `intermediate` layer is to prepare `staging` data into `marts`. It could very well be `ephemeral` which means that they will not create any object in the target data warehouse - the query will only run as a CTE and is able to be reference by the `ref` command in `dbt`. It is beneficial to use a separate layer for these queries as it will reduce complexity of queries and promote modularity in the code.
 
 Create the `intermediate` layer:
 
@@ -887,6 +889,7 @@ models:
       in and if there's a correlation between name length and login frequency. This
       information can help in making data-driven decisions, like tailoring user engagement
       strategies.
+
   - name: logins
     description: One record per login.
     columns:
@@ -906,6 +909,13 @@ models:
           - relationships:
               to: ref('people')
               field: people_id
+      - name: date_key
+        description: Foreign key for dates.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dates')
+              field: date_day
       - name: full_name
         description: Full name of people
       - name: _dbt_hash
@@ -958,6 +968,7 @@ rename as (
 final as (
     select
         *,
+        date(login_timestamp) as date_key,
         {{ 
             dbt_utils.generate_surrogate_key(
                 dbt_utils.get_filtered_columns_in_relation(
@@ -1050,8 +1061,70 @@ dbt docs generate && dbt docs serve
 
 This will open the web application that hosts the `manifest.json` and `catalog.json` files rendered by the `dbt docs generate` command at `localhost:8080`.
 
+## ✔️ `dbt test`
+
+To see this in action, change the end date in the `dates.sql` to `2023-12-31`. This will change the cut-off date so that some logins won’t have a valid relationship to a row in `dates.sql`. Tests in `dbt` is set to fail if the query returns >0 rows.
+
+Run this to refresh the `dates` table and run all tests:
+
+```bash
+dbt run --select dates -f && dbt test
+```
+
+## ➕ `dbt merge`
+
+To show case `Materialization: Incremental` we can go into `raw_logins.csv` and randomly edit one line to change the `userid`. Then run the following command to update the table and trigger a merge:
+
+```bash
+dbt seed --select raw_logins && dbt run --select logins
+```
+
+To see that the row has been changed, we can run this `SQL` query.
+
+```sql
+--dbt merge
+
+select * from logins where _dbt_inserted_at <> _dbt_updated_at
+```
+
+## 📸 `dbt snapshot`
+
+To implement SCD2 in `dbt` we use something called `snapshot`. This is a point-in-time replica of a specific table. The first run `dbt` will add the `snapshot` table together with some metadata columns. This table will contain the result set of the initial `select` statement. On subsequent runs `dbt` will check for changes to rows and update the metadata columns accordingly. Snapshots are only run with the `snapshot` command, so schedule it to run frequently.
+
+```bash
+dbt snapshot
+```
+
+Run the people script again (`script/people_generator_script.py`), optionally add a deleted timestamp to one user, and rerun the `dbt snapshot` command. This should generate 3-4 new rows in the snapshot table. 
+
 # 4️⃣ Visualize
 
 ## 👁️‍🗨️ `Metabase`
 
 Open meta base at `[localhost:3000](http://localhost:3000)` and follow the setup. For `host` and `port` supply the network that we set up in the `compose.yml` → `consid_postgres` and `5432`. This differs from how we connect to the database from our laptop, as we are then connecting to the database with `localhost` and the other exposed port `8000`. Explore how many logins our users has done each!
+
+```sql
+--Top 10 people to login
+
+SELECT
+  "public"."people"."full_name" AS "full_name",
+  "Dates - Date Key"."month_name" AS "Dates - Date Key__month_name",
+  "Dates - Date Key"."year_number" AS "Dates - Date Key__year_number",
+  COUNT(*) AS "count"
+FROM
+  "public"."people"
+ 
+LEFT JOIN "public"."logins" AS "Logins" ON "public"."people"."people_id" = "Logins"."people_id"
+  LEFT JOIN "public"."dates" AS "Dates - Date Key" ON "Logins"."date_key" = "Dates - Date Key"."date_day"
+GROUP BY
+  "public"."people"."full_name",
+  "Dates - Date Key"."month_name",
+  "Dates - Date Key"."year_number"
+ORDER BY
+  "count" DESC,
+  "public"."people"."full_name" ASC,
+  "Dates - Date Key"."month_name" ASC,
+  "Dates - Date Key"."year_number" ASC
+LIMIT
+  10
+```
