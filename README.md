@@ -1,4 +1,4 @@
-# dbt from scratch 🌟 a Consid session
+# 🌟 dbt from scratch
 
 > An end-to-end, containerized data engineering project that leverages open-source technology to generate, transform, load and visualize data. Everything runs on `Docker` with official images and `Dev Containers`.
 > 
@@ -12,7 +12,7 @@ What we will use:
 - `dbt` to transform data. We’ll also mock EL with Python scripts and the `dbt seed` command.
 - An official `PostgreSQL` image as our open-source relational database (mock-DWH). Easiest to setup with `dbt` as it has an official provider.
 - `DBeaver` as database UI. Other options could be `psql` (CLI), `adminer` or `pgAdmin`.
-- `Metabase` as our open-source, free and self-hosted on Docker visualization tool.
+- `Metabase` as our open-source, free and self-hosted on `Docker` visualization tool.
 
 What we won’t use but might add:
 
@@ -22,11 +22,26 @@ What we won’t use but might add:
 
 Prerequisites to follow along:
 
-- `Docker Desktop`
+- `Docker Desktop` up and running.
+
+## 🤔 What `dbt` is
+
+`dbt` typically refers to a popular open-source analytics engineering tool called `dbt` (short for "data build tool"). `dbt` is designed to help analysts and data engineers transform data in their warehouse more effectively. It enables data analysts to write SQL queries, transformations, and models in a modular and version-controlled way.
+
+Key features of `dbt` include:
+
+1. **Modularization:** `dbt` promotes a modular approach to writing SQL queries. Analysts can create reusable SQL files (called "models") for specific business logic or data transformations.
+2. **Version Control:** `dbt` allows you to version control your SQL code, making it easier to track changes over time and collaborate with others.
+3. **Dependency Management:** `dbt` understands the dependencies between different models, making it easier to manage the execution order of transformations.
+4. **Testing:** `dbt` includes a testing framework that allows analysts to write tests for their data models, ensuring data quality and consistency.
+5. **Documentation:** `dbt` generates documentation for your data models automatically, making it easier for team members to understand the structure and purpose of different datasets.
+6. **Execution:** `dbt` can execute SQL queries and transformations directly in your data warehouse, such as BigQuery, Snowflake, or Redshift.
+
+Overall, `dbt` is part of the modern data stack and is often used in conjunction with other tools like data warehouses, BI tools, and orchestration tools to build scalable and maintainable data analytics pipelines.
 
 # 2️⃣ Init
 
-Open a terminal and create a folder that our project will live in. Change into that directory and start the Docker initialization. This will create three files for us, and we will overwrite two of them. We will get a `.dockerignore` file for free.
+Open a terminal in a development folder, and create a folder that our project will live in. Change into that directory and start the `Docker` initialization. This will create three files for us, and we will overwrite two of them. We will get a `.dockerignore` file for free.
 
 ```bash
 mkdir consid_dbt && \
@@ -43,7 +58,7 @@ Hit enter, selecting “Other”. Open directory with `vscode` here.
 code .
 ```
 
-Edit the `Dockerfile` with this content.
+Since `dbt` is a Python package, all we need is a simple Python image to run it. Edit the `Dockerfile` with this content.
 
 ```docker
 #Dockerfile
@@ -64,13 +79,13 @@ COPY requirements.txt /tmp/pip-tmp/
 RUN pip3 --disable-pip-version-check \
         --use-deprecated=legacy-resolver \
         --no-cache-dir \
-				install -r /tmp/pip-tmp/requirements.txt && \
+        install -r /tmp/pip-tmp/requirements.txt && \
         rm -rf /tmp/pip-tmp
 
-ENV DBT_PROFILES_DIR=/usr/src/consid_dbt
+ENV DBT_PROFILES_DIR=/usr/src/consid_dbt/dbt_project
 ```
 
-And edit the `compose.yml` with this:
+Edit the `compose.yml` with this:
 
 ```yaml
 version: "3.9"
@@ -82,7 +97,8 @@ services:
     environment:
       - POSTGRES_PASSWORD=postgres
     ports:
-      - "8000:5432"
+      - "5432:5432" # postgresql ports
+      - "3000:3000" # metabase ports
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -119,21 +135,25 @@ services:
   consid_metabase:
     image: metabase/metabase
     container_name: consid_metabase
-    ports:
-      - "3000:3000"
     network_mode: service:consid_postgres
 
 volumes:
   consid_dbt:
 ```
 
+This file will tell `Docker` to create three services for us within one group, the PostgreSQL database, the Python image with `dbt` package installed and Metabase. What’s important to note here is:
+
+- `volumes` → this makes sure we persist data even if the restart the container.
+- `network_mode` → this allows us to run every service on the same network as the database.
+
 Edit the `requirements.txt` with this:
 
 ```python
-sqlfluff==2.3.5
-sqlfluff-templater-dbt==2.3.5
-dbt-postgres==1.7.2
-pandas==2.1.3
+sqlfluff==2.3.5 # A linting tool that is promoted by dbt Labs.
+sqlfluff-templater-dbt==2.3.5   # An extension to the sqlfluff package \
+                                # that interprets dbt templating correctly.
+dbt-postgres==1.7.2 # Installs dbt-core and dbt-postgres adapter.
+pandas==2.1.3 # Used in mock Python scripts.
 ```
 
 `sqlfluff` is a linting tool that works great with `dbt` . `dbt-postgres` will also install `dbt-core` and `pandas` is used in some Python scripts later on. 
@@ -144,7 +164,7 @@ Edit the `devcontainer.json` with this:
 // Update the VARIANT arg in docker-compose.yml to pick a Python version: 3, 3.8, 3.7, 3.6
 {
     "name": "consid_dbt",
-    "dockerComposeFile": "../compose.yml",
+    "dockerComposeFile": "../compose.yaml",
     "service": "consid_dbt",
     "workspaceFolder": "/usr/src/consid_dbt",
     "customizations": {
@@ -188,29 +208,31 @@ Edit the `devcontainer.json` with this:
             ]
         }
     },
-    // Comment the if git is not initialized.
-    "initializeCommand": "git submodule update --init",
+    // Uncomment the if git is initialized.
+    //"initializeCommand": "git submodule update --init",
     "remoteUser": "vscode"
 }
 ```
 
-Open a terminal and type:
+A `Dev Container` typically refers to a development environment that is containerized using technologies like `Docker`. This approach aims to provide a consistent and reproducible development environment across different machines and for different developers. Above will install some extensions that is handy in vscode inside the container. It also sets up a connection to the PostgreSQL database inside the `SQLTools` extension.
+
+All done! Open a terminal and type:
 
 ```bash
 docker compose build && docker compose up -d
 ```
 
-This will create a container, with two containers inside. One is our database, and one is a Python 3.10 image with `dbt-core` + `dbt-postgres` adapter installed.
+Voilá! This will create a container, with three containers inside. One is our database, and one is a Python 3.10 image with `dbt-core` + `dbt-postgres` adapter installed. The last one will be our visualization tool Metabase.
 
 To start working inside the container, where `dbt` is installed, we can utilize our pre-configured `devcontainer.json` file to “Reopen in container”. Hit `ctrl+shift+p` and search for this.
 
-Now it’s time to let `dbt` do some scaffolding for us. We will create a new `dbt` project inside the current directory. This will create a new project inside a subdirectory named what we call the project. I did not like this setup as it would mean this folder structure → `consid_dbt/consid_dbt`. Also, the default location for `profiles.yml` is at `~/.dbt` which is good for local projects, but then each developer needs to place this file outside of the repository on their local machine. By excluding it from the initialization and adding it manually inside the repo (and using `jinja` to inject variables from an `.env` file not to expose sensitive values) we make it possible to share this project with anyone easily. However, the credentials is not sensitive here so we will not hide them.
+# 3️⃣ `dbt` setup
+
+Now it’s time to let `dbt` do some scaffolding for us. We will create a new `dbt` project inside the current directory, called `dbt_project`. This will create a new project inside a subdirectory named what we call the project. The default location for `profiles.yml` is at `~/.dbt` which is good for local projects, but then each developer needs to place this file outside of the repository on their local machine. By excluding it from the initialization (with the flag `--skip-profile-setup`) and adding it manually inside the repo (and using `jinja` to inject variables from an `.env` file not to expose sensitive values) we make it possible to share this project with anyone easily. However, the credentials is not sensitive here so we will not hide them.
 
 ```bash
-dbt init consid_dbt --skip-profile-setup && \
-mv consid_dbt/* . && \
-wait && \
-rm -r consid_dbt && \
+dbt init dbt_project --skip-profile-setup && \
+cd dbt_project && \
 touch profiles.yml && \
 touch packages.yml
 ```
@@ -272,18 +294,23 @@ And this on `packages.yml` with this:
 #packages.yml
 
 packages:
-  - package: dbt-labs/dbt_utils
+  - package: dbt-labs/dbt_utils # Handy macros, such as surrogate key generatorors
     version: 1.1.1
-  - package: calogica/dbt_date
+  - package: calogica/dbt_date # Handy date creation macros
     version: 0.10.0
 ```
-
-# 3️⃣ `dbt` setup
 
 Test the connection to our `PostgreSQL` container by running:
 
 ```bash
 dbt debug
+```
+
+If `dbt` complains about not finding the `profiles.yml` and `dbt_project.yml` try changing the environment values as:
+
+```bash
+export DBT_PROFILES_DIR=/usr/src/consid_dbt/dbt_project && \
+export DBT_PROJECT_DIR=/usr/src/consid_dbt/dbt_project
 ```
 
 Install packages as defined in the `packages.yml`:
@@ -314,7 +341,7 @@ However, we will use it to mock an EL flow to our `bronze` schema. It will be a 
 
 ## 📜 Scripts
 
-Create a folder called scripts, one file called `login_generator_script.py` and one file called `people_generator_script.py`.
+Inside the `dbt` project, create a folder called scripts, one file called `login_generator_script.py` and one file called `people_generator_script.py`.
 
 ```bash
 mkdir scripts && \
@@ -333,6 +360,7 @@ import datetime
 import random
 import os
 
+# Function to generate an MD5 hash of the current timestamp
 def generate_unique_id(start_date):
     global unique_id_counter
     timestamp = start_date
@@ -350,7 +378,7 @@ def generate_random_userid():
     return random.randint(1, 4)
 
 def generate_random_login_amount():
-    return random.randint(1, 10)
+    return random.randint(1, 100)
 
 def generate_login_data(iterated_date, num_rows):
     all_logins = []
@@ -367,7 +395,6 @@ def generate_login_data(iterated_date, num_rows):
 
 ###############################################################
 
-# Function to generate an MD5 hash of the current timestamp
 # Makes sure that each ID will be unique.
 unique_id_counter = 1
 
@@ -384,22 +411,29 @@ if os.path.exists(csv_file):
     start_date = last_date + datetime.timedelta(days=1)
 else:
     # If the file doesn't exist, start from the specified date
-    start_date = datetime.datetime(2023, 1, 1)
+    start_year_input = int(input("Enter starting year: "))
+    start_month_input = int(input("Enter starting month: "))
+    start_day_input = int(input("Enter starting day: "))
+    start_date = datetime.datetime(start_year_input, start_month_input, start_day_input)
     
-# Generate login data for one year
-a_week = [i for i in range(365)]
+# Generate login data for each day in selected range, defaults to 7 days.
+range_input = input("Enter the number of days to generate logins for: ")
+range_value = int(range_input) if range_input.isdigit() else 7
+period = [i for i in range(range_value)]
 week_df = pd.DataFrame()
-for each_day in a_week:
-    iterated_date = start_date + datetime.timedelta(days=each_day)
+for day in period:
+    iterated_date = start_date + datetime.timedelta(days=day)
     num_rows = generate_random_login_amount()
     df = generate_login_data(iterated_date, num_rows)
     week_df = pd.concat([week_df, df])
 
 # Append the data to the CSV file
 week_df.to_csv(csv_file, mode='a', header=not os.path.exists(csv_file), index=False)
-
-print(df)
+generated_rows = len(week_df)
+print(f"Generated {generated_rows} logins for {range_value} days.")
 ```
+
+Note on above: If the syntax highlighter doesn’t start, try reloading the vscode window.
 
 And this for `people_generator_script.py`:
 
@@ -432,23 +466,26 @@ file_exists = os.path.isfile(csv_file)
 existing_data = pd.read_csv(csv_file, keep_default_na=True) if file_exists else pd.DataFrame()
 
 df = pd.DataFrame(data)
+now = str(datetime.datetime.now())
 
 # Set created_at timestamp only if the file is new
 if not file_exists:
-    df['created_at'] = str(datetime.datetime.now())
+    df['created_at'] = now
+    df['updated_at'] = now
     df.to_csv(csv_file, index=False)
     
-
 # Check if row exists in the source file and update updated_at
 if not existing_data.empty and pd.Series(df['id']).isin(existing_data['id']).any():
     df = pd.DataFrame(existing_data)
-    df.loc[df["deleted_at"].isnull(), 'updated_at'] = str(datetime.datetime.now())
+    rows_to_update = (df["deleted_at"].isnull()).sum()
+    df.loc[df["deleted_at"].isnull(), 'updated_at'] = now
     df.to_csv(csv_file, index=False)
-
-print(df)
+    print(f" Updated {rows_to_update} rows.")
+else:
+    print(f" Added {len(df)} rows.")
 ```
 
-Run both scripts once. By using `chmod` (change mode) in bash, we change the permission for this file with `x` meaning it can get executed by just stating the file name. We could run it anyway with `python3 some_script.py` but this is cooler.
+Run both scripts once. By using `chmod` (change mode) in bash, we change the permission for this file with `x` meaning it can get executed by just stating the file name. We could run it anyway with `python3 some_script.py` but this is cooler(?).
 
 ```python
 chmod +x scripts/login_generator_script.py && \
@@ -457,13 +494,15 @@ chmod +x scripts/people_generator_script.py && \
 scripts/people_generator_script.py
 ```
 
+Tip! When opening the csv files, vscode suggests to install an extension, the Rainbow CSV extension. Go to this extension and click “add to devcontainer.json”.
+
 Now, run `dbt seed`.
 
 ```bash
 dbt seed
 ```
 
-Good to know that the compiled query can be viewed at `target/run/consid_dbt/seeds` for each seed. There we can see that each seed is run with `truncate` first (if it doesn’t exist). We will only see the latest run here.
+Good to know that the compiled query can be viewed at `target/run/consid_dbt/seeds` for each seed. There we can see that each seed is run with `truncate` first (if it doesn’t exist). We will only see the latest run here. Open the file raw_logins.csv in above path, and then run `dbt seed` one more time, and when the run finishes, the file will change DML statement from `CREATE TABLE` to `TRUNCATE TABLE`. This can also be viewed in the `dbt.log` file.
 
 If we need to change schema of our source data, with seeds, we can add the `-f` flag for a full-refresh of the target table. In this case, as we can see in the logs, we can see that the statement then changes from `truncate` to `drop table if exists`.
 
@@ -471,7 +510,7 @@ If we need to change schema of our source data, with seeds, we can add the `-f` 
 dbt seed -f
 ```
 
-Login to DBeaver and see the results with a query.
+Login to `DBeaver` and see the results with a query.
 
 ```sql
 SELECT id, firstname, lastname, created_at, updated_at, deleted_at
@@ -556,18 +595,22 @@ models:
     description: Customer data
     columns:
       - name: people_id
+        description: Primary Key
         tests:
           - unique
           - not_null
 
   - name: stg_login_service__logins
+    description: Logins from people
     columns:
       - name: login_id
+        description: Primary Key
         tests:
           - unique
           - not_null
 
       - name: day_of_week
+        description: Which day of the week the login took place.
         tests:
           - accepted_values:
               values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
@@ -580,7 +623,7 @@ version: 2
 
 sources:
   - name: login_service
-    schema: dbt_jakob
+    schema: consid
     description: Login data for the Login Service
     tables:
       - name: raw_people
@@ -724,7 +767,7 @@ select * from renamed
 Notice how the `sqlfluff` plugin is complaining about a rule. It wants us to “Select wildcards then simple targets before calculations and aggregates”. Another default rule is to not allow a file to end without a empty new line. In this case I don’t want this specific rule to apply. Let’s change this behavior by adding a `.sqlfluff` file and add the following code to it.
 
 ```bash
-touch .sqlfluff
+touch ../.sqlfluff
 ```
 
 ```toml
@@ -757,7 +800,7 @@ dbt run
 View the compiled code and queries in either `target/` or `logs/`. Notice how `sqlfluff` complains about the compiled code inside target. Add a `.sqlfluffignore` file to the project:  
 
 ```bash
-touch .sqlfluffignore
+touch ../.sqlfluffignore
 ```
 
 ```

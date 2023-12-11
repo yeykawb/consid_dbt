@@ -1,7 +1,7 @@
 // Update the VARIANT arg in docker-compose.yml to pick a Python version: 3, 3.8, 3.7, 3.6
 {
     "name": "consid_dbt",
-    "dockerComposeFile": "../compose.yml",
+    "dockerComposeFile": "../compose.yaml",
     "service": "consid_dbt",
     "workspaceFolder": "/usr/src/consid_dbt",
     "customizations": {
@@ -46,7 +46,7 @@
             ]
         }
     },
-    // Uncomment the git initialization for this demo (no repo initialized).
-    "initializeCommand": "git submodule update --init",
+    // Uncomment the if git is initialized.
+    //"initializeCommand": "git submodule update --init",
     "remoteUser": "vscode"
 }

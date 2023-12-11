@@ -1,5 +1,4 @@
 # profiles.yml
-# metabase = considadmin123
 
 consid_dbt:
   target: dev

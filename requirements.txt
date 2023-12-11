@@ -1,4 +1,5 @@
-sqlfluff==2.3.5
-sqlfluff-templater-dbt==2.3.5
-dbt-postgres==1.7.2
-pandas==2.1.3
+sqlfluff==2.3.5 # A linting tool that is promoted by dbt Labs.
+sqlfluff-templater-dbt==2.3.5   # An extension to the sqlfluff package \
+                                # that interprets dbt templating correctly.
+dbt-postgres==1.7.2 # Installs dbt-core and dbt-postgres adapter.
+pandas==2.1.3 # Used in mock Python scripts.

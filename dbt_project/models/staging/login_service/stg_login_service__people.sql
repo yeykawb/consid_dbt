@@ -6,6 +6,7 @@
     )
 }}
 
+
 with people as (
 
     select * from {{ ref('base_login_service__people') }}

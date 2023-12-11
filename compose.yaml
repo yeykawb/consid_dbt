@@ -7,7 +7,8 @@ services:
     environment:
       - POSTGRES_PASSWORD=postgres
     ports:
-      - "8000:5432"
+      - "5432:5432" # postgresql ports
+      - "3000:3000" # metabase ports
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -41,12 +42,10 @@ services:
     # Uncomment the next line to use a non-root user for all processes.
     user: vscode
 
-  metabase:
+  consid_metabase:
     image: metabase/metabase
-    container_name: metabase
-    ports:
-      - "3000:3000"
+    container_name: consid_metabase
     network_mode: service:consid_postgres
-    
+
 volumes:
   consid_dbt:

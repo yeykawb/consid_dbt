@@ -1,0 +1,7 @@
+#packages.yml
+
+packages:
+  - package: dbt-labs/dbt_utils # Handy macros, such as surrogate key generatorors
+    version: 1.1.1
+  - package: calogica/dbt_date # Handy date creation macros
+    version: 0.10.0

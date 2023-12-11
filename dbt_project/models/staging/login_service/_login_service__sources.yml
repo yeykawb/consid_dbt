@@ -4,7 +4,7 @@ version: 2
 
 sources:
   - name: login_service
-    schema: public
+    schema: consid
     description: Login data for the Login Service
     tables:
       - name: raw_people
