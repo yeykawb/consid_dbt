@@ -1,7 +1,9 @@
 # 🌟 dbt from scratch
 
-> An end-to-end, containerized data engineering project that leverages open-source technology to generate, transform, load and visualize data. Everything runs on `Docker` with official images and `Dev Containers`.
+> A local end-to-end, containerized data engineering project that leverages open-source technology to generate, transform, load and visualize data. Everything runs on `Docker` with official images and `Dev Containers`.
 > 
+
+![dbt-from-scratch.png](.github/dbt-from-scratch.png)
 
 # 1️⃣ Introduction
 
@@ -24,20 +26,67 @@ Prerequisites to follow along:
 
 - `Docker Desktop` up and running.
 
-## 🤔 What `dbt` is
+## 🤔 What `dbt` is → the T in ELT
 
 `dbt` typically refers to a popular open-source analytics engineering tool called `dbt` (short for "data build tool"). `dbt` is designed to help analysts and data engineers transform data in their warehouse more effectively. It enables data analysts to write SQL queries, transformations, and models in a modular and version-controlled way.
 
 Key features of `dbt` include:
 
-1. **Modularization:** `dbt` promotes a modular approach to writing SQL queries. Analysts can create reusable SQL files (called "models") for specific business logic or data transformations.
+1. **Modularization:** `dbt` promotes a modular (DRY) approach to writing SQL queries. Analysts can create reusable SQL files (called `models`) for specific business logic or data transformations.
 2. **Version Control:** `dbt` allows you to version control your SQL code, making it easier to track changes over time and collaborate with others.
 3. **Dependency Management:** `dbt` understands the dependencies between different models, making it easier to manage the execution order of transformations.
 4. **Testing:** `dbt` includes a testing framework that allows analysts to write tests for their data models, ensuring data quality and consistency.
 5. **Documentation:** `dbt` generates documentation for your data models automatically, making it easier for team members to understand the structure and purpose of different datasets.
 6. **Execution:** `dbt` can execute SQL queries and transformations directly in your data warehouse, such as BigQuery, Snowflake, or Redshift.
 
-Overall, `dbt` is part of the modern data stack and is often used in conjunction with other tools like data warehouses, BI tools, and orchestration tools to build scalable and maintainable data analytics pipelines.
+Overall, `dbt` is part of the modern data stack and is often used in conjunction with other tools like data warehouses, BI tools, and orchestration tools to build scalable and maintainable data analytics pipelines. `dbt` also offers, as many other OS tools, a managed cloud service that enhances the `dbt` experience with scheduling capabilities, easier connection setups, a web-based UI, etc. 
+
+## 📟 `dbt` commands
+
+`dbt` includes a number of commands to manipulate data and the underlying data warehouse. What is central to know about `dbt` is that data is always assumed to exist in an underlying data warehouse. At its core, `dbt` is a number of `SELECT` statements, that compiles into whatever `SQL` dialect the underlying data warehouse uses for DDL and DML queries. Here are a number of central commands:
+
+### `dbt run`
+
+`dbt run` executes compiled sql model files against the current `target` database. dbt connects to the target database and runs the relevant SQL required to materialize all data models using the specified [materialization](https://docs.getdbt.com/terms/materialization) strategies. Models are run in the order defined by the dependency graph generated during compilation. Intelligent multi-threading is used to minimize execution time without violating dependencies.
+
+### `dbt test`
+
+`dbt test` runs tests defined on models, sources, snapshots, and seeds. It expects that you have already created those resources through the appropriate commands and specified tests in `yml` files.
+
+### `dbt docs`
+
+`dbt docs` has two supported subcommands: `generate` and `serve`. `generate` is responsible for generating your project's documentation, and `serve` starts a webserver on port 8080 to serve your documentation locally and opens the documentation site in your default browser.
+
+### `dbt snapshot`
+
+`dbt` provides a mechanism, `snapshots`, which records changes to a mutable [table](https://docs.getdbt.com/terms/table) over time. `snapshots` implement [type-2 Slowly Changing Dimensions](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row) over mutable source tables. These Slowly Changing Dimensions (or SCDs) identify how a row in a table changes over time.
+
+### `dbt build`
+
+The `dbt build` command will:
+
+- run models
+- test tests
+- snapshot snapshots
+- seed seeds
+
+in DAG order, for selected resources or an entire project.
+
+### `dbt source [freshness]`
+
+If your dbt project is [configured with sources](https://docs.getdbt.com/docs/build/sources), then the `dbt source freshness` command will query all of your defined source tables, determining the "freshness" of these tables. If the tables are stale (based on the `freshness` config specified for your sources) then dbt will report a warning or error accordingly. Good to know is that this command is ********not******** run with `dbt build`.
+
+### `dbt compile`
+
+`dbt compile` generates executable SQL from source `model`, `test`, and `analysis` files. You can find these compiled SQL files in the `target/` directory of your dbt project. `dbt compile` is *not* a pre-requisite of `dbt run`, or other building commands. Those commands will handle compilation themselves. If you just want dbt to read and validate your project code, without connecting to the data warehouse, use `dbt parse` instead.
+
+### `dbt deps`
+
+`dbt deps` pulls the most recent version of the dependencies listed in your `packages.yml` from git.
+
+### `dbt debug`
+
+`dbt debug` is a utility function to test the database connection and display information for debugging purposes, such as the validity of your project file and your installation of any requisite dependencies (like `git` when you run `dbt deps`).
 
 # 2️⃣ Init
 
@@ -222,7 +271,7 @@ All done! Open a terminal and type:
 docker compose build && docker compose up -d
 ```
 
-Voilá! This will create a container, with three containers inside. One is our database, and one is a Python 3.10 image with `dbt-core` + `dbt-postgres` adapter installed. The last one will be our visualization tool Metabase.
+This will create a container, with three containers inside. One is our database, and one is a `Python3.10` image with `dbt-core` + `dbt-postgres` adapter installed. The last one will be our visualization tool `Metabase`.
 
 To start working inside the container, where `dbt` is installed, we can utilize our pre-configured `devcontainer.json` file to “Reopen in container”. Hit `ctrl+shift+p` and search for this.
 
@@ -252,7 +301,7 @@ consid_dbt:
       password: postgres
       port: 5432
       dbname: postgres
-      schema: public
+      schema: silver
       threads: 1
 ```
 
@@ -323,7 +372,7 @@ dbt deps
 
 Right now our repo doesn’t look like much. Let’s create `seeds`.
 
-`Seeds` are typically an easy way to populate data that typically don’t change, are not part of any source and would help in semantically clarify other data. A good example would be the table `state_codes` as below:
+`seeds` are typically an easy way to populate data that typically don’t change, are not part of any source and would help in semantically clarify other data. A good example would be the table `state_codes` as below:
 
 ```yaml
 +------+------------+
@@ -337,7 +386,7 @@ Right now our repo doesn’t look like much. Let’s create `seeds`.
 +------+------------+
 ```
 
-However, we will use it to mock an EL flow to our `bronze` schema. It will be a simple Python script that will act as an EL-tool, such as Azure Data Factory, that fetches new `logins` from a source system and loads it into our `bronze` layer. This layer will be referenced to by `dbt` as a `source`.
+However, we will use it to mock an EL flow to our `bronze` layer. It will be a simple Python script that will act as an EL-tool, like Azure Data Factory, that fetches new `logins` from a source system and loads it into our `bronze` layer. This layer will be referenced to by `dbt` as a `source`.
 
 ## 📜 Scripts
 
@@ -485,7 +534,7 @@ else:
     print(f" Added {len(df)} rows.")
 ```
 
-Run both scripts once. By using `chmod` (change mode) in bash, we change the permission for this file with `x` meaning it can get executed by just stating the file name. We could run it anyway with `python3 some_script.py` but this is cooler(?).
+Run both scripts once. By using `chmod` (change mode) in bash, we change the permission for this file with `x` meaning it can get executed by just stating the file name. We could run it anyway with `python3 some_script.py` but this good to know.
 
 ```python
 chmod +x scripts/login_generator_script.py && \
@@ -494,7 +543,7 @@ chmod +x scripts/people_generator_script.py && \
 scripts/people_generator_script.py
 ```
 
-Tip! When opening the csv files, vscode suggests to install an extension, the Rainbow CSV extension. Go to this extension and click “add to devcontainer.json”.
+Tip! When opening the csv files, vscode suggests to install an extension, the Rainbow CSV extension. Go to this extension and click “add to devcontainer.json”, to keep this extension installed for everyone using the same `Dev Container`.
 
 Now, run `dbt seed`.
 
@@ -502,9 +551,9 @@ Now, run `dbt seed`.
 dbt seed
 ```
 
-Good to know that the compiled query can be viewed at `target/run/consid_dbt/seeds` for each seed. There we can see that each seed is run with `truncate` first (if it doesn’t exist). We will only see the latest run here. Open the file raw_logins.csv in above path, and then run `dbt seed` one more time, and when the run finishes, the file will change DML statement from `CREATE TABLE` to `TRUNCATE TABLE`. This can also be viewed in the `dbt.log` file.
+Important to know is that the compiled query can be viewed at `target/run/consid_dbt/seeds` for each seed. There we can see that each seed is run with `truncate` first (if it doesn’t exist). We will only see the latest run here. Open the file raw_logins.csv in above path, and then run `dbt seed` one more time, and when the run finishes, the file will change DML statement from `CREATE TABLE` to `TRUNCATE TABLE`. This can also be viewed in the `dbt.log` file.
 
-If we need to change schema of our source data, with seeds, we can add the `-f` flag for a full-refresh of the target table. In this case, as we can see in the logs, we can see that the statement then changes from `truncate` to `drop table if exists`.
+If we need to change schema of our source data, with seeds, we can add the `-f` flag for a full-refresh of the target table. In this case, as we can see in the logs, we can see that the statement then changes from `TRUNCATE` to `DROP TABLE IF EXISTS`.
 
 ```bash
 dbt seed -f
@@ -519,9 +568,9 @@ FROM public.raw_people;
 
 ## 🧊 Models and sources
 
-A `model` is a `select`-statement in SQL that will compile into `DML` and `DDL` queries in the target data warehouse. They will create tables, views or nothing at all (ephemeral). `dbt` supports `Jinja templating`, and offers a modular approach to development in SQL. A `source` is a table inside the data warehouse or lakehouse that already has been populated with data by another workflow. It is a reference to that raw table, and by specifying a `sources.yml` file we allow `dbt` to reference these sources when the code compiles.
+A `model` is a `SELECT`-statement in SQL that will compile into `DML` and `DDL` queries in the target data warehouse. They will create tables, views or nothing at all (ephemeral). `dbt` supports `Jinja templating`, and offers a modular approach to development in SQL. A `source` is a table inside the data warehouse or lakehouse that already has been populated with data by another workflow. It is a reference to that raw table, and by specifying a `sources.yml` file we allow `dbt` to reference these sources when the code compiles, modularizing our code.
 
-Let’s improve our `dbt` project with three layers → `staging`, `intermediate` and `marts`. `dbt` suggests the following structure.
+Let’s improve our `dbt` project with three layers → `staging`, `intermediate` and `marts`. `dbt` suggests the following structure:
 
 ```
 jaffle_shop
@@ -623,7 +672,9 @@ version: 2
 
 sources:
   - name: login_service
-    schema: consid
+    # schema is optional, as by default dbt uses name as schema
+    # but we could if we want set another name for it
+    #schema: consid
     description: Login data for the Login Service
     tables:
       - name: raw_people

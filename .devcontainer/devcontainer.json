@@ -47,6 +47,6 @@
         }
     },
     // Uncomment the if git is initialized.
-    //"initializeCommand": "git submodule update --init",
+    "initializeCommand": "git submodule update --init",
     "remoteUser": "vscode"
 }
