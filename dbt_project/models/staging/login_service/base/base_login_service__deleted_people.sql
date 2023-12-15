@@ -8,14 +8,14 @@
 
 with source as (
 
-    select * from {{ source('login_service', 'raw_people') }}
+    select * from {{ source('login_service', 'raw_people_deleted') }}
 ),
 
 deleted_customers as (
 
     select
         id as people_id,
-        deleted_at::timestamp
+        deleted as is_deleted
     from source
 )
 

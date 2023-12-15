@@ -1,11 +1,5 @@
 --people.sql
 
-{{
-  config(
-    materialized = 'table',
-    )
-}}
-
 with people as (
     select
         *,
@@ -18,7 +12,6 @@ logins_pivoted_to_people as (
 ),
 
 final as (
-
     select
         people.*,
         logins_pivoted_to_people.login_amount

@@ -10,5 +10,5 @@ consid_dbt:
       password: postgres
       port: 5432
       dbname: postgres
-      schema: silver
+      schema: staging
       threads: 1

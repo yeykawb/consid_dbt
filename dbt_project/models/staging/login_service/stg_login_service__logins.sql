@@ -15,7 +15,7 @@ with source as (
 renamed as (
     select
         id::text as login_id,
-        logintimestamp::timestamp as login_timestamp,
+        logintimestamp::date as login_date,
         userid as people_id,
         case dayofweek
             when 1 then 'Monday'

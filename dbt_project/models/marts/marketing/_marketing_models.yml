@@ -3,6 +3,13 @@
 version: 2
 models:
   - name: people
+    description: The dbt model 'people' is a tool that organizes and analyzes user
+      data. It tracks whether a user's account is active, the number of times they've
+      logged in, the length of their name, and the last time their data was updated.
+      This model can be used to understand user behavior, such as how often they log
+      in and if there's a correlation between name length and login frequency. This
+      information can help in making data-driven decisions, like tailoring user engagement
+      strategies.
     columns:
       - name: people_id
         description: Primary key of the people table
@@ -23,13 +30,7 @@ models:
       - name: login_amount
         description: The total number of times the person has logged in. This is a
           whole number.
-    description: The dbt model 'people' is a tool that organizes and analyzes user
-      data. It tracks whether a user's account is active, the number of times they've
-      logged in, the length of their name, and the last time their data was updated.
-      This model can be used to understand user behavior, such as how often they log
-      in and if there's a correlation between name length and login frequency. This
-      information can help in making data-driven decisions, like tailoring user engagement
-      strategies.
+
 
   - name: logins
     description: One record per login.

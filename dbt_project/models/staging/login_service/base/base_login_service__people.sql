@@ -16,7 +16,8 @@ renamed as (
 
     select
         id as people_id,
-        concat(firstname, ' ', lastname) as full_name,
+        firstname,
+        lastname,
         created_at::timestamp,
         updated_at::timestamp
     from source

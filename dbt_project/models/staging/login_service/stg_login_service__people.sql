@@ -2,7 +2,7 @@
 
 {{
   config(
-    materialized = 'view'
+    materialized = 'table'
     )
 }}
 
@@ -20,8 +20,12 @@ deleted_people as (
 join_and_mark_deleted_people as (
 
     select
-        people.*,
-        coalesce(deleted_people.deleted_at is not null, false) as is_deleted
+        people.people_id,
+        concat(people.firstname, ' ', people.lastname) as full_name,
+        people.created_at,
+        people.updated_at,
+        deleted_people.is_deleted
+        
     from people
     left join deleted_people on people.people_id = deleted_people.people_id
 )

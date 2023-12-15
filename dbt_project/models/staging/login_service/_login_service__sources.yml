@@ -6,11 +6,13 @@ sources:
   - name: login_service
     # schema is optional, as by default dbt uses name as schema
     # but we could if we want set another name for it
-    #schema: consid
+    # schema: consid
     description: Login data for the Login Service
     tables:
       - name: raw_people
-        description: One record per person that has logged in
+        description: One record per person in the system
+      - name: raw_people_deleted
+        description: One record per person in the system that is deleted
       - name: raw_logins
         description: One record per login that a person has made
         freshness:
