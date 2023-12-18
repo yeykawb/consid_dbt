@@ -21,6 +21,7 @@ What we won’t use but might add:
 - An orchestrator/workflow scheduler. Examples of this would be the paid `dbt Cloud` offering, `Azure Data Factory`, `Airflow`, `Prefect`, `Dagster`, `Cron jobs`, `Kestra`, `Databricks workflows`. We won’t use this because they either cost money or are too complex to setup properly for a local project. In a real-life scenario, most probably as a consultant, `dbt Cloud` would be used. I might add open-source `Dagster` in the future.
 - `git` can be added whenever you want, but it won’t be part of this project to add it.
 - More interesting data sources, either by using datasets from `Kaggle`, or using free APIs.
+- CI/CD.
 
 Prerequisites to follow along:
 
@@ -41,25 +42,37 @@ Key features of `dbt` include:
 
 Overall, `dbt` is part of the modern data stack and is often used in conjunction with other tools like data warehouses, BI tools, and orchestration tools to build scalable and maintainable data analytics pipelines. `dbt` also offers, as many other OS tools, a managed cloud service that enhances the `dbt` experience with scheduling capabilities, easier connection setups, a web-based UI, etc. 
 
+## 🕵️ Who is it for?
+
+`dbt` has “its own” title for their target audience, Analytics Engineer which places itself between Data Engineers and Data Analysts.
+
+ 
+
+![analytics-engineer-comparison.png](.github/analytics-engineer-comparison.png)
+
 ## 📟 `dbt` commands
 
 `dbt` includes a number of commands to manipulate data and the underlying data warehouse. What is central to know about `dbt` is that data is always assumed to exist in an underlying data warehouse. At its core, `dbt` is a number of `SELECT` statements, that compiles into whatever `SQL` dialect the underlying data warehouse uses for DDL and DML queries. Here are a number of central commands:
 
+### `dbt seed`
+
+The `dbt seed` command will load `csv` files located in the `seed-paths` directory of your dbt project into your [data warehouse](https://docs.getdbt.com/terms/data-warehouse).
+
 ### `dbt run`
 
-`dbt run` executes compiled sql model files against the current `target` database. dbt connects to the target database and runs the relevant SQL required to materialize all data models using the specified [materialization](https://docs.getdbt.com/terms/materialization) strategies. Models are run in the order defined by the dependency graph generated during compilation. Intelligent multi-threading is used to minimize execution time without violating dependencies.
+`dbt run` executes compiled `sql` model files against the current `target` database. dbt connects to the target database and runs the relevant SQL required to materialize all data models using the specified [materialization](https://docs.getdbt.com/terms/materialization) strategies. Models are run in the order defined by the dependency graph generated during compilation. Intelligent multi-threading is used to minimize execution time without violating dependencies.
 
 ### `dbt test`
 
 `dbt test` runs tests defined on models, sources, snapshots, and seeds. It expects that you have already created those resources through the appropriate commands and specified tests in `yml` files.
 
-### `dbt docs`
-
-`dbt docs` has two supported subcommands: `generate` and `serve`. `generate` is responsible for generating your project's documentation, and `serve` starts a webserver on port 8080 to serve your documentation locally and opens the documentation site in your default browser.
-
 ### `dbt snapshot`
 
 `dbt` provides a mechanism, `snapshots`, which records changes to a mutable [table](https://docs.getdbt.com/terms/table) over time. `snapshots` implement [type-2 Slowly Changing Dimensions](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row) over mutable source tables. These Slowly Changing Dimensions (or SCDs) identify how a row in a table changes over time.
+
+### `dbt docs`
+
+`dbt docs` has two supported subcommands: `generate` and `serve`. `generate` is responsible for generating your project's documentation, and `serve` starts a webserver on port 8080 to serve your documentation locally and opens the documentation site in your default browser.
 
 ### `dbt build`
 
@@ -207,7 +220,7 @@ pandas==2.1.3 # Used in mock Python scripts.
 
 `sqlfluff` is a linting tool that works great with `dbt` . `dbt-postgres` will also install `dbt-core` and `pandas` is used in some Python scripts later on. 
 
-Edit the `devcontainer.json` with this:
+Edit the `devcontainer.json` with this (don’t forget to uncomment the `git` line if initialized):
 
 ```json
 // Update the VARIANT arg in docker-compose.yml to pick a Python version: 3, 3.8, 3.7, 3.6
@@ -301,7 +314,7 @@ consid_dbt:
       password: postgres
       port: 5432
       dbname: postgres
-      schema: silver
+      schema: staging
       threads: 1
 ```
 
@@ -335,6 +348,10 @@ models:
       +materialized: ephemeral
     marts:
       +materialized: table
+
+seeds:
+  consid_dbt:
+    +schema: login_service
 ```
 
 And this on `packages.yml` with this:
@@ -372,7 +389,7 @@ dbt deps
 
 Right now our repo doesn’t look like much. Let’s create `seeds`.
 
-`seeds` are typically an easy way to populate data that typically don’t change, are not part of any source and would help in semantically clarify other data. A good example would be the table `state_codes` as below:
+`dbt seed` is an easy way to populate data that typically don’t change, are not part of any source and would help in semantically clarify other data. Some great examples of this are `dim_date` tables, `country_code` tables, or `zipcode` mapping tables. These are used often in analysis but never change. Instead of manually creating them as a `dbt` data model, it makes sense to reuse a publicly available file and ingest it into your warehouse. This way, you aren’t making more work for yourself! A good example would be the table `state_codes` as below:
 
 ```yaml
 +------+------------+
@@ -403,83 +420,67 @@ Paste the following script for the `login_generator_script.py`:
 ```python
 #!/usr/bin/env python
 
-import pandas as pd
-import hashlib
 import datetime
+import pandas as pd
 import random
 import os
-
-# Function to generate an MD5 hash of the current timestamp
-def generate_unique_id(start_date):
-    global unique_id_counter
-    timestamp = start_date
-    encode_input = f"{timestamp}_{unique_id_counter}"
-    encoded = encode_input.encode()
-    unique_id = hashlib.md5(encoded).hexdigest()
-    unique_id_counter += 1
-    return unique_id
-
-# Function to get the day of the week as an integer (1=Monday, 7=Sunday)
-def get_day_of_week(date):
-    return date.isoweekday()
-
-def generate_random_userid():
-    return random.randint(1, 4)
-
-def generate_random_login_amount():
-    return random.randint(1, 100)
+import uuid
 
 def generate_login_data(iterated_date, num_rows):
     all_logins = []
     
     data = {
-        "id": [generate_unique_id(iterated_date) for _ in range(num_rows)],
+        "id": [str(uuid.uuid4()) for _ in range(num_rows)],
         "logintimestamp": [iterated_date for i in range(num_rows)],
-        "dayofweek": [get_day_of_week(iterated_date) for i in range(num_rows)],
-        "userid": [generate_random_userid() for _ in range(num_rows)]
+        "dayofweek": [iterated_date.isoweekday() for i in range(num_rows)],
+        "userid": [random.randint(1, 4) for _ in range(num_rows)]
     }
     all_logins.append(data)
     
     return pd.concat([pd.DataFrame(data) for data in all_logins], ignore_index=True)
 
-###############################################################
-
-# Makes sure that each ID will be unique.
-unique_id_counter = 1
-
-# Set the working directory to the script's directory
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-# File to store the data
-csv_file = "../seeds/raw_logins.csv"
-
-# Get the start date from the last recorded date in the CSV file
-if os.path.exists(csv_file):
-    df_existing = pd.read_csv(csv_file)
-    last_date = pd.to_datetime(df_existing['logintimestamp']).max()
-    start_date = last_date + datetime.timedelta(days=1)
-else:
-    # If the file doesn't exist, start from the specified date
-    start_year_input = int(input("Enter starting year: "))
-    start_month_input = int(input("Enter starting month: "))
-    start_day_input = int(input("Enter starting day: "))
-    start_date = datetime.datetime(start_year_input, start_month_input, start_day_input)
+def main():
     
-# Generate login data for each day in selected range, defaults to 7 days.
-range_input = input("Enter the number of days to generate logins for: ")
-range_value = int(range_input) if range_input.isdigit() else 7
-period = [i for i in range(range_value)]
-week_df = pd.DataFrame()
-for day in period:
-    iterated_date = start_date + datetime.timedelta(days=day)
-    num_rows = generate_random_login_amount()
-    df = generate_login_data(iterated_date, num_rows)
-    week_df = pd.concat([week_df, df])
+    # Set the working directory to the script's directory
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# Append the data to the CSV file
-week_df.to_csv(csv_file, mode='a', header=not os.path.exists(csv_file), index=False)
-generated_rows = len(week_df)
-print(f"Generated {generated_rows} logins for {range_value} days.")
+    # File to store the data
+    csv_file = "../seeds/raw_logins.csv"
+
+    # Get the start date from the last recorded date in the CSV file
+    if os.path.exists(csv_file):
+        df_existing = pd.read_csv(csv_file)
+        last_date = pd.to_datetime(df_existing['logintimestamp']).max()
+        start_date = last_date + datetime.timedelta(days=1)
+    else:
+        # If the file doesn't exist, start from the specified date
+        start_year_input = int(input("Enter starting year: "))
+        start_month_input = int(input("Enter starting month: "))
+        start_day_input = int(input("Enter starting day: "))
+        start_date = datetime.datetime(start_year_input, start_month_input, start_day_input)
+        
+    # Generate login data for each day in selected range, defaults to 7 days.
+    range_input = input("Enter the number of days to generate logins for: ")
+    range_value = int(range_input) if range_input.isdigit() else 7
+    
+    num_rows_input = input("Enter the number of logins to generate for each day: ")
+    num_rows_value = int(num_rows_input) if num_rows_input.isdigit() else 10
+    
+    period = [i for i in range(range_value)]
+    week_df = pd.DataFrame()
+    for day in period:
+        iterated_date = start_date + datetime.timedelta(days=day)
+        num_rows = random.randint(1, num_rows_value)
+        df = generate_login_data(iterated_date, num_rows)
+        week_df = pd.concat([week_df, df])
+
+    # Append the data to the CSV file
+    week_df.to_csv(csv_file, mode='a', header=not os.path.exists(csv_file), index=False)
+    generated_rows = len(week_df)
+    print(f"Generated {generated_rows} logins for {range_value} days.")
+
+if __name__ == "__main__":
+    main()
 ```
 
 Note on above: If the syntax highlighter doesn’t start, try reloading the vscode window.
@@ -545,13 +546,42 @@ scripts/people_generator_script.py
 
 Tip! When opening the csv files, vscode suggests to install an extension, the Rainbow CSV extension. Go to this extension and click “add to devcontainer.json”, to keep this extension installed for everyone using the same `Dev Container`.
 
+## 🤖 Default schema macro
+
+A note on how `dbt` handles schemas. The default schema is set in the `profiles.yml` file. This is the schema that `dbt` writes to if no custom schema is supplied via a config block or in the `dbt_project.yml`. The default behavior of supplying a default schema is that `dbt` concatenates the default and custom as `<target_schema>_<custom_schema>`. More on this [here](https://docs.getdbt.com/docs/build/custom-schemas). When developing alone and locally we can remove this behavior by adding a macro in our macros folder, overriding this default behavior.
+
+Create a macro file called `generate_schema_name.sql`.
+
+```bash
+touch macros/generate_schema_name.sql
+```
+
+Add this code.
+
+```sql
+{% macro generate_schema_name(custom_schema_name, node) -%}
+
+    {%- set default_schema = target.schema -%}
+    {%- if custom_schema_name is none -%}
+
+        {{ default_schema }}
+
+    {%- else -%}
+
+        {{ custom_schema_name | trim }} 
+
+    {%- endif -%}
+
+{%- endmacro %}
+```
+
 Now, run `dbt seed`.
 
 ```bash
 dbt seed
 ```
 
-Important to know is that the compiled query can be viewed at `target/run/consid_dbt/seeds` for each seed. There we can see that each seed is run with `truncate` first (if it doesn’t exist). We will only see the latest run here. Open the file raw_logins.csv in above path, and then run `dbt seed` one more time, and when the run finishes, the file will change DML statement from `CREATE TABLE` to `TRUNCATE TABLE`. This can also be viewed in the `dbt.log` file.
+Important to know is that the compiled query can be viewed at `target/run/consid_dbt/seeds` for each seed. There we can see that each seed is run with `TRUNCATE` first (if it doesn’t exist). We will only see the latest run here. Open the file `raw_logins.csv` in above path, and then run `dbt seed` one more time, and when the run finishes, the file will change DML statement from `CREATE TABLE` to `TRUNCATE TABLE`. This can also be viewed in the `dbt.log` file.
 
 If we need to change schema of our source data, with seeds, we can add the `-f` flag for a full-refresh of the target table. In this case, as we can see in the logs, we can see that the statement then changes from `TRUNCATE` to `DROP TABLE IF EXISTS`.
 
@@ -566,9 +596,52 @@ SELECT id, firstname, lastname, created_at, updated_at, deleted_at
 FROM public.raw_people;
 ```
 
+While we’re at it, also create a file called `generate_loaded_at_column.sql`. 
+
+```bash
+touch macros/generate_loaded_at_column.sql
+```
+
+We’re doing this to add a timestamp when we loaded the data into our warehouse with `dbt seed`. This is not an out-of-the-box functionality for `dbt` since this command is not meant to ingest source data into the warehouse. Note that the query here is PostgreSQL specific:
+
+```sql
+{% macro generate_loaded_at_column(tables) -%}
+    {%- for table in tables -%}
+        {%- set node = ref(table) -%}
+        {% set query %}
+            DO $$ 
+            BEGIN
+                -- Check if the column already exists
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_schema = '{{ node.schema }}' 
+                    AND table_name = '{{ node.identifier }}' 
+                    AND column_name = '_dbt_loaded_at'
+                    ) 
+                THEN
+                    -- If not exists, then add the column
+                    EXECUTE 'ALTER TABLE ' || quote_ident('{{ node.schema }}') || '.' || quote_ident('{{ node.identifier }}') || ' ADD COLUMN _dbt_loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP';
+                END IF;
+            END $$;
+        {% endset %}
+        {{ run_query(query) }}
+    {%- endfor -%}
+    
+    {# /* run below command to insert column for each seed */ #}
+    {# /* dbt run-operation generate_loaded_at_column --args '{tables: [raw_logins, raw_people, raw_people_deleted]}' */ #}
+{%- endmacro %}
+```
+
+Finally run this as a `dbt run-operation` (this is only needed once per `seed` post the first `dbt seed` run or subsequent runs with the `--full-refresh` flag):
+
+```bash
+dbt run-operation generate_loaded_at_column --args '{tables: [raw_logins, raw_people, raw_people_deleted]}'
+```
+
 ## 🧊 Models and sources
 
-A `model` is a `SELECT`-statement in SQL that will compile into `DML` and `DDL` queries in the target data warehouse. They will create tables, views or nothing at all (ephemeral). `dbt` supports `Jinja templating`, and offers a modular approach to development in SQL. A `source` is a table inside the data warehouse or lakehouse that already has been populated with data by another workflow. It is a reference to that raw table, and by specifying a `sources.yml` file we allow `dbt` to reference these sources when the code compiles, modularizing our code.
+A `model` is a `SELECT`-statement in `sql` that will compile into `DML` and `DDL` queries in the target data warehouse. They will create tables, views or nothing at all (ephemeral). `dbt` supports `Jinja templating`, and offers a modular approach to development in `sql`. A `source` is a table inside the data warehouse or lakehouse that already has been populated with data by another workflow. It is a reference to that raw table, and by specifying a `sources.yml` file we allow `dbt` to reference these sources when the code compiles, modularizing our code.
 
 Let’s improve our `dbt` project with three layers → `staging`, `intermediate` and `marts`. `dbt` suggests the following structure:
 
@@ -657,12 +730,6 @@ models:
         tests:
           - unique
           - not_null
-
-      - name: day_of_week
-        description: Which day of the week the login took place.
-        tests:
-          - accepted_values:
-              values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
 ```
 
 ```yaml
@@ -691,12 +758,6 @@ Paste this into `stg_login_service__logins.sql`:
 ```sql
 --stg_login_service__logins.sql
 
-{{
-  config(
-    materialized = 'view'
-    )
-}}
-
 with source as (
 
     select * from {{ source('login_service', 'raw_logins') }}
@@ -706,18 +767,8 @@ with source as (
 renamed as (
     select
         id::text as login_id,
-        logintimestamp::timestamp as login_timestamp,
-        userid as people_id,
-        case dayofweek
-            when 1 then 'Monday'
-            when 2 then 'Tuesday'
-            when 3 then 'Wednesday'
-            when 4 then 'Thursday'
-            when 5 then 'Friday'
-            when 6 then 'Saturday'
-            when 7 then 'Sunday'
-            else 'Unknown'
-        end as day_of_week
+        logintimestamp::date as date_key,
+        userid as people_id
     from source
 )
 
@@ -728,12 +779,6 @@ Paste this into `stg_login_service__people.sql`:
 
 ```sql
 --stg_login_service__people.sql
-
-{{
-  config(
-    materialized = 'view'
-    )
-}}
 
 with people as (
 
@@ -748,8 +793,12 @@ deleted_people as (
 join_and_mark_deleted_people as (
 
     select
-        people.*,
-        coalesce(deleted_people.deleted_at is not null, false) as is_deleted
+        people.people_id,
+        concat(people.firstname, ' ', people.lastname) as full_name,
+        people.created_at,
+        people.updated_at,
+        deleted_people.is_deleted
+        
     from people
     left join deleted_people on people.people_id = deleted_people.people_id
 )
@@ -762,22 +811,16 @@ Paste this into `base_login_service__deleted_people.sql`:
 ```sql
 --base_login_service__deleted_people.sql
 
-{{
-  config(
-    materialized = 'view'
-    )
-}}
-
 with source as (
 
-    select * from {{ source('login_service', 'raw_people') }}
+    select * from {{ source('login_service', 'raw_people_deleted') }}
 ),
 
 deleted_customers as (
 
     select
         id as people_id,
-        deleted_at::timestamp
+        deleted as is_deleted
     from source
 )
 
@@ -789,12 +832,6 @@ Paste this into `base_login_service__people.sql`:
 ```sql
 --base_login_service__people.sql
 
-{{
-  config(
-    materialized = 'view'
-    )
-}}
-
 with source as (
 
     select * from {{ source('login_service', 'raw_people') }}
@@ -804,7 +841,8 @@ renamed as (
 
     select
         id as people_id,
-        concat(firstname, ' ', lastname) as full_name,
+        firstname,
+        lastname,
         created_at::timestamp,
         updated_at::timestamp
     from source
@@ -870,7 +908,9 @@ Create the `intermediate` layer:
 ```bash
 mkdir models/intermediate && \
 touch models/intermediate/_int_marketing__models.yml && \
-touch models/intermediate/int_logins_pivoted_to_people.sql
+touch models/intermediate/int_logins_pivoted_to_people.sql && \
+touch models/intermediate/int_logins_people_joined.sql && \
+touch models/intermediate/int_logins_with_weekdays.sql
 ```
 
 Paste this into `_int_marketing__models.yml`:
@@ -886,6 +926,24 @@ models:
     columns:
       - name: people_id
       - name: login_amount
+
+  - name: int_logins_people_joined
+    description: Joins the two tables together
+    columns:
+      - name: login_id
+      - name: date_key
+      - name: people_id
+      - name: full_name
+
+  - name: int_logins_with_weekdays
+    description: Adds the weekday column
+    columns:
+      - name: login_id
+      - name: day_of_week
+        description: Which day of the week the login took place.
+        tests:
+          - accepted_values:
+              values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
 ```
 
 Paste this into `int_logins_pivoted_to_people.sql`:
@@ -907,6 +965,61 @@ pivot_and_aggregate_logins_to_people_grain as (
 )
 
 select * from pivot_and_aggregate_logins_to_people_grain
+```
+
+Paste this into `int_logins_people_joined.sql`:
+
+```sql
+with logins as (
+    select * from {{ ref("stg_login_service__logins") }}
+),
+
+people as (
+    select * from {{ ref("stg_login_service__people") }}
+),
+
+rename as (
+    select
+        logins.login_id,
+        logins.date_key,
+        people.people_id,
+        people.full_name
+    from logins
+    left join people on logins.people_id = people.people_id
+)
+
+select * from rename
+```
+
+Paste this into `int_logins_with_weekdays.sql`:
+
+```sql
+--int_logins_pivoted_to_people.sql
+
+with add_dow as (
+    select
+        login_id,
+        {{ dbt_date.day_of_week("date_key") }} as dow_number
+    from {{ ref('stg_login_service__logins') }}
+),
+
+rename_dow as (
+    select 
+        login_id,
+        case add_dow.dow_number
+            when 1 then 'Monday'
+            when 2 then 'Tuesday'
+            when 3 then 'Wednesday'
+            when 4 then 'Thursday'
+            when 5 then 'Friday'
+            when 6 then 'Saturday'
+            when 7 then 'Sunday'
+            else 'Unknown'
+        end as day_of_week 
+    from add_dow
+)
+
+select * from rename_dow
 ```
 
 ## 🏪 Marts
@@ -956,6 +1069,13 @@ Paste this into `_marketing_models.yml`:
 version: 2
 models:
   - name: people
+    description: The dbt model 'people' is a tool that organizes and analyzes user
+      data. It tracks whether a user's account is active, the number of times they've
+      logged in, the length of their name, and the last time their data was updated.
+      This model can be used to understand user behavior, such as how often they log
+      in and if there's a correlation between name length and login frequency. This
+      information can help in making data-driven decisions, like tailoring user engagement
+      strategies.
     columns:
       - name: people_id
         description: Primary key of the people table
@@ -976,13 +1096,6 @@ models:
       - name: login_amount
         description: The total number of times the person has logged in. This is a
           whole number.
-    description: The dbt model 'people' is a tool that organizes and analyzes user
-      data. It tracks whether a user's account is active, the number of times they've
-      logged in, the length of their name, and the last time their data was updated.
-      This model can be used to understand user behavior, such as how often they log
-      in and if there's a correlation between name length and login frequency. This
-      information can help in making data-driven decisions, like tailoring user engagement
-      strategies.
 
   - name: logins
     description: One record per login.
@@ -1033,10 +1146,10 @@ Paste this into `logins.sql`:
 {{
   config(
     materialized = 'incremental',
+    schema = 'gold',
     unique_key = 'login_id',
     on_schema_change = 'append_new_columns',
-    incremental_strategy = 'merge',
-    merge_exclude_columns = ['_dbt_inserted_at']
+    incremental_strategy = 'merge'
     )
 }}
 
@@ -1044,42 +1157,27 @@ with logins as (
     select * from {{ ref("stg_login_service__logins") }}
 ),
 
-people as (
-    select * from {{ ref("stg_login_service__people") }}
+joined as (
+    select * from {{ ref("int_logins_people_joined") }}
 ),
 
-rename as (
-    select
-        logins.login_id,
-        logins.login_timestamp,
-        logins.day_of_week,
-        logins.people_id,
-        people.full_name
-    from logins
-    left join people on logins.people_id = people.people_id
-),
-
-final as (
-    select
-        *,
-        date(login_timestamp) as date_key,
-        {{ 
-            dbt_utils.generate_surrogate_key(
-                dbt_utils.get_filtered_columns_in_relation(
-                        from=ref("stg_login_service__logins")
-                )
-            )
-        }} as _dbt_hash,
-        current_timestamp as _dbt_inserted_at,
-        current_timestamp as _dbt_updated_at
-    from rename
+dow as (
+    select * from {{ ref("int_logins_with_weekdays") }}
 )
 
-select * from final
+select 
+    l.login_id,
+    l.date_key,
+    j.people_id,
+    j.full_name,
+    d.day_of_week 
+from logins l
+left join joined j on l.login_id = j.login_id
+left join dow d on l.login_id = d.login_id
 
 {% if is_incremental() %}
 
-    where _dbt_hash not in (select _dbt_hash from {{ this }})
+    where date_key > (select max(date_key) from {{ this }})
 
 {% endif %}
 ```
@@ -1089,15 +1187,11 @@ Paste this into `people.sql`:
 ```sql
 --people.sql
 
-{{
-  config(
-    materialized = 'table',
-    )
-}}
-
 with people as (
     select
-        *,
+        people_id,
+        full_name,
+        is_deleted,
         length(full_name) as name_length
     from {{ ref("stg_login_service__people") }}
 ),
@@ -1107,7 +1201,6 @@ logins_pivoted_to_people as (
 ),
 
 final as (
-
     select
         people.*,
         logins_pivoted_to_people.login_amount
@@ -1140,7 +1233,7 @@ touch models/utilities/dates.sql
     )
 }}
 
-{{ dbt_date.get_date_dimension("2023-01-01", "2023-12-31") }}
+{{ dbt_date.get_date_dimension("2023-01-01", "2024-01-01") }}
 ```
 
 ## 📄 `dbt docs`
