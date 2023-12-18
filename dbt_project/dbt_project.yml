@@ -29,4 +29,4 @@ models:
 
 seeds:
   consid_dbt:
-    +schema: login_service
+    schema: login_service

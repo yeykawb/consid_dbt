@@ -20,9 +20,3 @@ models:
         tests:
           - unique
           - not_null
-
-      - name: day_of_week
-        description: Which day of the week the login took place.
-        tests:
-          - accepted_values:
-              values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]

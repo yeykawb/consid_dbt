@@ -8,3 +8,21 @@ models:
     columns:
       - name: people_id
       - name: login_amount
+
+  - name: int_logins_people_joined
+    description: Joins the two tables together
+    columns:
+      - name: login_id
+      - name: date_key
+      - name: people_id
+      - name: full_name
+
+  - name: int_logins_with_weekdays
+    description: Adds the weekday column
+    columns:
+      - name: login_id
+      - name: day_of_week
+        description: Which day of the week the login took place.
+        tests:
+          - accepted_values:
+              values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
