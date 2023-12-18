@@ -12,7 +12,6 @@ def generate_login_data(iterated_date, num_rows):
     data = {
         "id": [str(uuid.uuid4()) for _ in range(num_rows)],
         "logintimestamp": [iterated_date for i in range(num_rows)],
-        "dayofweek": [iterated_date.isoweekday() for i in range(num_rows)],
         "userid": [random.randint(1, 4) for _ in range(num_rows)]
     }
     all_logins.append(data)

@@ -4,6 +4,8 @@ import pandas as pd
 import datetime
 import os
 
+now = str(datetime.datetime.now())
+
 raw_people = {
     "id": [1,2,3,4],
     "firstname": ["Jakob", "Stefan", "Rami", "Therese"],
@@ -32,7 +34,6 @@ raw_people_deleted_file_exists = os.path.isfile(raw_people_deleted_file)
 existing_people_data = pd.read_csv(raw_people_file, keep_default_na=True) if raw_people_file_exists else pd.DataFrame()
 
 raw_people_df = pd.DataFrame(raw_people)
-now = str(datetime.datetime.now())
 
 # Set created_at timestamp only if the file is new
 if not raw_people_file_exists:

@@ -1,12 +1,5 @@
 --base_login_service__people.sql
 
-{{
-  config(
-    materialized = 'view'
-    )
-}}
-
-
 with source as (
 
     select * from {{ source('login_service', 'raw_people') }}

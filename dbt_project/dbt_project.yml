@@ -26,7 +26,7 @@ models:
     marts:
       +materialized: table
       +schema: gold
-      
+
 seeds:
   consid_dbt:
     +schema: login_service

@@ -2,7 +2,9 @@
 
 with people as (
     select
-        *,
+        people_id,
+        full_name,
+        is_deleted,
         length(full_name) as name_length
     from {{ ref("stg_login_service__people") }}
 ),
