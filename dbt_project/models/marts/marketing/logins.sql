@@ -3,7 +3,7 @@
 {{
   config(
     materialized = 'incremental',
-    schema = 'gold',
+    schema = 'marts',
     unique_key = 'login_id',
     on_schema_change = 'append_new_columns',
     incremental_strategy = 'merge'
@@ -34,6 +34,6 @@ left join dow d on l.login_id = d.login_id
 
 {% if is_incremental() %}
 
-    where date_key > (select max(date_key) from {{ this }})
+    where l.date_key > (select max(date_key) from {{ this }})
 
 {% endif %}

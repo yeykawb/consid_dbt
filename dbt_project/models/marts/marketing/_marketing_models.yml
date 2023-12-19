@@ -60,14 +60,6 @@ models:
               field: date_day
       - name: full_name
         description: Full name of people
-      - name: _dbt_hash
-        description: A unique identifier for each login record, generated using a
-          hash function that combines several columns to ensure uniqueness.
-      - name: _dbt_inserted_at
-        description: The timestamp when this login record was first added to the database.
-      - name: _dbt_updated_at
-        description: The timestamp when this login record was last modified in the
-          database.
       - name: login_amount
         description: The total number of times a person has logged in. This is a running
           count that increments by 1 each time the person logs in.
