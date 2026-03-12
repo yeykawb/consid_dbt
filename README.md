@@ -348,10 +348,11 @@ models:
       +materialized: ephemeral
     marts:
       +materialized: table
+      +schema: marts
 
 seeds:
   consid_dbt:
-    +schema: login_service
+    schema: login_service
 ```
 
 And this on `packages.yml` with this:
@@ -432,7 +433,6 @@ def generate_login_data(iterated_date, num_rows):
     data = {
         "id": [str(uuid.uuid4()) for _ in range(num_rows)],
         "logintimestamp": [iterated_date for i in range(num_rows)],
-        "dayofweek": [iterated_date.isoweekday() for i in range(num_rows)],
         "userid": [random.randint(1, 4) for _ in range(num_rows)]
     }
     all_logins.append(data)
@@ -494,45 +494,59 @@ import pandas as pd
 import datetime
 import os
 
-data = {
+now = str(datetime.datetime.now())
+
+raw_people = {
     "id": [1,2,3,4],
     "firstname": ["Jakob", "Stefan", "Rami", "Therese"],
     "lastname": ["Agelin", "Verzel", "Moghrabi", "Olsson"],
     "created_at": [None for _ in range(4)],
-    "updated_at": [None for _ in range(4)],
-    "deleted_at": [None for _ in range(4)]
+    "updated_at": [None for _ in range(4)]
+}
+
+raw_people_deleted = {
+    "id": [1,2,3,4],
+    "deleted": [False for _ in range(4)]
 }
 
 # Set the working directory to the script's directory
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # File to store the data
-csv_file = "../seeds/raw_people.csv"
+raw_people_file = "../seeds/raw_people.csv"
+raw_people_deleted_file = "../seeds/raw_people_deleted.csv"
 
 # Check if the file already exists
-file_exists = os.path.isfile(csv_file)
+raw_people_file_exists = os.path.isfile(raw_people_file)
+raw_people_deleted_file_exists = os.path.isfile(raw_people_deleted_file)
 
 # Load existing data from the CSV file
-existing_data = pd.read_csv(csv_file, keep_default_na=True) if file_exists else pd.DataFrame()
+existing_people_data = pd.read_csv(raw_people_file, keep_default_na=True) if raw_people_file_exists else pd.DataFrame()
 
-df = pd.DataFrame(data)
-now = str(datetime.datetime.now())
+raw_people_df = pd.DataFrame(raw_people)
 
 # Set created_at timestamp only if the file is new
-if not file_exists:
-    df['created_at'] = now
-    df['updated_at'] = now
-    df.to_csv(csv_file, index=False)
-    
+if not raw_people_file_exists:
+    raw_people_df['created_at'] = now
+    raw_people_df['updated_at'] = now
+    raw_people_df.to_csv(raw_people_file, index=False)
+
+if not raw_people_deleted_file_exists:
+    deleted_df = pd.DataFrame(raw_people_deleted)
+    deleted_df.to_csv(raw_people_deleted_file, index=False)
+
+existing_deleted_people_data = pd.read_csv(raw_people_deleted_file, keep_default_na=True)
+
 # Check if row exists in the source file and update updated_at
-if not existing_data.empty and pd.Series(df['id']).isin(existing_data['id']).any():
-    df = pd.DataFrame(existing_data)
-    rows_to_update = (df["deleted_at"].isnull()).sum()
-    df.loc[df["deleted_at"].isnull(), 'updated_at'] = now
-    df.to_csv(csv_file, index=False)
+if not existing_people_data.empty and pd.Series(raw_people_df['id']).isin(existing_people_data['id']).any():
+    merged_df = pd.merge(existing_people_data, existing_deleted_people_data, on='id')
+    rows_to_update = (merged_df["deleted"] == True).sum()
+    merged_df.loc[merged_df["deleted"] == True, 'updated_at'] = now
+    merged_df.drop("deleted", axis=1, inplace=True)
+    merged_df.to_csv(raw_people_file, index=False)
     print(f" Updated {rows_to_update} rows.")
 else:
-    print(f" Added {len(df)} rows.")
+    print(f" Added {len(raw_people_df)} rows.")
 ```
 
 Run both scripts once. By using `chmod` (change mode) in bash, we change the permission for this file with `x` meaning it can get executed by just stating the file name. We could run it anyway with `python3 some_script.py` but this good to know.
@@ -592,8 +606,8 @@ dbt seed -f
 Login to `DBeaver` and see the results with a query.
 
 ```sql
-SELECT id, firstname, lastname, created_at, updated_at, deleted_at
-FROM public.raw_people;
+SELECT id, firstname, lastname, created_at, updated_at
+FROM login_service.raw_people;
 ```
 
 While we’re at it, also create a file called `generate_loaded_at_column.sql`. 
@@ -689,7 +703,9 @@ jaffle_shop
     └── assert_positive_value_for_total_amount.sql
 ```
 
-Let’s use this, and start with `staging`:
+Let’s use this, and start with `staging`. Notice the `base` subfolder inside the staging layer. Base models provide a 1:1 mapping from source tables, isolating renaming and type casting so that the staging models above them can focus on business logic like joins and transformations.
+
+Let’s create the files:
 
 ```bash
 mkdir models/staging && \
@@ -745,7 +761,9 @@ sources:
     description: Login data for the Login Service
     tables:
       - name: raw_people
-        description: One record per person that has logged in
+        description: One record per person in the system
+      - name: raw_people_deleted
+        description: One record per person in the system that is deleted
       - name: raw_logins
         description: One record per login that a person has made
         freshness:
@@ -943,7 +961,7 @@ models:
         description: Which day of the week the login took place.
         tests:
           - accepted_values:
-              values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+              values: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
 ```
 
 Paste this into `int_logins_pivoted_to_people.sql`:
@@ -994,7 +1012,7 @@ select * from rename
 Paste this into `int_logins_with_weekdays.sql`:
 
 ```sql
---int_logins_pivoted_to_people.sql
+--int_logins_with_weekdays.sql
 
 with add_dow as (
     select
@@ -1084,9 +1102,6 @@ models:
           - not_null
       - name: full_name
         description: The full name.
-      - name: updated_at
-        description: The date and time when the person's record was last updated.
-          This is in the standard timestamp format.
       - name: is_deleted
         description: Indicates whether the person's record has been marked as deleted.
           This is a true or false value.
@@ -1105,17 +1120,6 @@ models:
         tests:
           - unique
           - not_null
-      - name: login_timestamp
-        description: When the user logged in.
-      - name: day_of_week
-        description: Number indicating the dayOfWeek. 1 = Monday.
-      - name: people_id
-        description: Foreign key for peopleId. Should be renamed in public schema.
-        tests:
-          - not_null
-          - relationships:
-              to: ref('people')
-              field: people_id
       - name: date_key
         description: Foreign key for dates.
         tests:
@@ -1123,19 +1127,17 @@ models:
           - relationships:
               to: ref('dates')
               field: date_day
+      - name: people_id
+        description: Foreign key for people.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('people')
+              field: people_id
       - name: full_name
-        description: Full name of people
-      - name: _dbt_hash
-        description: A unique identifier for each login record, generated using a
-          hash function that combines several columns to ensure uniqueness.
-      - name: _dbt_inserted_at
-        description: The timestamp when this login record was first added to the database.
-      - name: _dbt_updated_at
-        description: The timestamp when this login record was last modified in the
-          database.
-      - name: login_amount
-        description: The total number of times a person has logged in. This is a running
-          count that increments by 1 each time the person logs in.
+        description: Full name of the person.
+      - name: day_of_week
+        description: Name of the day of the week the login took place (e.g. Monday).
 ```
 
 Paste this into `logins.sql`:
@@ -1146,7 +1148,7 @@ Paste this into `logins.sql`:
 {{
   config(
     materialized = 'incremental',
-    schema = 'gold',
+    schema = 'marts',
     unique_key = 'login_id',
     on_schema_change = 'append_new_columns',
     incremental_strategy = 'merge'
@@ -1177,7 +1179,7 @@ left join dow d on l.login_id = d.login_id
 
 {% if is_incremental() %}
 
-    where date_key > (select max(date_key) from {{ this }})
+    where l.date_key > (select max(date_key) from {{ this }})
 
 {% endif %}
 ```
@@ -1252,7 +1254,7 @@ This will open the web application that hosts the `manifest.json` and `catalog.j
 
 To see this in action, change the end date in the `dates.sql` to `2023-12-31`. This will change the cut-off date so that some logins won’t have a valid relationship to a row in `dates.sql`. Tests in `dbt` is set to fail if the query returns >0 rows.
 
-Run this to refresh the `dates` table and run all tests:
+Run this to refresh the `dates` table and run all tests. The `-f` flag is shorthand for `--full-refresh`, which forces dbt to rebuild the table from scratch instead of running incrementally:
 
 ```bash
 dbt run --select dates -f && dbt test
@@ -1282,13 +1284,13 @@ To implement SCD2 in `dbt` we use something called `snapshot`. This is a point-i
 dbt snapshot
 ```
 
-Run the people script again (`script/people_generator_script.py`), optionally add a deleted timestamp to one user, and rerun the `dbt snapshot` command. This should generate 3-4 new rows in the snapshot table. 
+Run the people script again (`scripts/people_generator_script.py`), optionally mark a user as deleted in `raw_people_deleted.csv`, and rerun the `dbt snapshot` command. This should generate new rows in the snapshot table.
 
 # 4️⃣ Visualize
 
 ## 👁️‍🗨️ `Metabase`
 
-Open meta base at `[localhost:3000](http://localhost:3000)` and follow the setup. For `host` and `port` supply the network that we set up in the `compose.yml` → `consid_postgres` and `5432`. This differs from how we connect to the database from our laptop, as we are then connecting to the database with `localhost` and the other exposed port `8000`. Explore how many logins our users has done each!
+Open Metabase at `[localhost:3000](http://localhost:3000)` and follow the setup. For `host` and `port` supply the network that we set up in the `compose.yaml` → `consid_postgres` and `5432`. This works because Metabase shares the same network as PostgreSQL via `network_mode: service:consid_postgres` in the compose file. Explore how many logins our users has done each!
 
 ```sql
 --Top 10 people to login

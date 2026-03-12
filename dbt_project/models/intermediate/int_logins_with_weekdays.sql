@@ -1,4 +1,4 @@
---int_logins_pivoted_to_people.sql
+--int_logins_with_weekdays.sql
 
 with add_dow as (
     select
